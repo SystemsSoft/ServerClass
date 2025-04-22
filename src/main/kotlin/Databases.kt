@@ -1,5 +1,7 @@
 package com.class_erp
 
+import com.class_erp.schemas.Acessos
+import com.class_erp.schemas.AcessosService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -18,7 +20,7 @@ fun Application.configureDatabases() {
 
     environment.log.info("✅ Conexão com o banco de dados 'effective_english_course' estabelecida com sucesso.")
 
-    val userService = UserService(database)
+    val userService = AcessosService(database)
 
     routing {
         // Create user

@@ -21,6 +21,9 @@ repositories {
 
 dependencies {
     implementation("mysql:mysql-connector-java:8.0.33")
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlinx.serialization.core)
+
     implementation(libs.ktor.network.tls)
     implementation(libs.koin.ktor)
     implementation(libs.koin.logger.slf4j)
