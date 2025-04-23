@@ -17,7 +17,7 @@ data class Acessos(
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class AcessosService(database: Database) {
-    object AccessesEntity : Table() {
+    object Accesses : Table() {
         val id = integer("id").autoIncrement()
         val className = varchar("className", length = 50)
         val codClass = varchar("codClass",length = 50)
@@ -29,35 +29,35 @@ class AcessosService(database: Database) {
 
     init {
         transaction(database) {
-            SchemaUtils.create(AccessesEntity)
+            SchemaUtils.create(Accesses)
         }
     }
 
     suspend fun create(user: Acessos): Int = dbQuery {
-        AccessesEntity.insert {
+        Accesses.insert {
             it[className] = user.className
             it[codClass] = user.codClass
             it[nome] = user.nome
             it[senha] = user.senha
-        }[AccessesEntity.id]
+        }[Accesses.id]
     }
 
     suspend fun read(id: Int): Acessos? {
         return dbQuery {
-            AccessesEntity.selectAll()
-                .where { AccessesEntity.id eq id }
+            Accesses.selectAll()
+                .where { Accesses.id eq id }
                 .map { Acessos(
-                    it[AccessesEntity.className],
-                    it[AccessesEntity.codClass],
-                    it[AccessesEntity.nome],
-                    it[AccessesEntity.senha]
+                    it[Accesses.className],
+                    it[Accesses.codClass],
+                    it[Accesses.nome],
+                    it[Accesses.senha]
                 ) }.singleOrNull()
         }
     }
 
     suspend fun update(id: Int, user: Acessos) {
         dbQuery {
-            AccessesEntity.update({ AccessesEntity.id eq id }) {
+            Accesses.update({ Accesses.id eq id }) {
                 it[className] = user.className
                 it[codClass] = user.codClass
                 it[nome] = user.nome
@@ -68,7 +68,7 @@ class AcessosService(database: Database) {
 
     suspend fun delete(id: Int) {
         dbQuery {
-            AccessesEntity.deleteWhere { AccessesEntity.id.eq(id) }
+            Accesses.deleteWhere { Accesses.id.eq(id) }
         }
     }
 

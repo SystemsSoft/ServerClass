@@ -24,7 +24,7 @@ fun Application.configureDatabases() {
 
     routing {
         // Create user
-        post("/users") {
+        post("/accesses") {
             val user = call.receive<Acessos>()
             val id = userService.create(user)
             call.respond(HttpStatusCode.Created, id)
