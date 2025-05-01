@@ -1,5 +1,6 @@
 package com.class_erp.schemas
 
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
@@ -13,6 +14,7 @@ data class Acessos(
     val codClass: String,
     val nome: String,
     val senha: String,
+    val email: String,
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -23,6 +25,7 @@ class AcessosService(database: Database) {
         val codClass = varchar("codClass",length = 50)
         val nome = varchar("nome",length = 50)
         val senha = varchar("senha",length = 50)
+        val email = varchar("email",length = 50)
 
         override val primaryKey = PrimaryKey(id)
     }
@@ -33,13 +36,17 @@ class AcessosService(database: Database) {
         }
     }
 
-    suspend fun create(user: Acessos): Int = dbQuery {
-        Accesses.insert {
-            it[className] = user.className
-            it[codClass] = user.codClass
-            it[nome] = user.nome
-            it[senha] = user.senha
-        }[Accesses.id]
+    suspend fun create(user: Acessos): Int {
+
+        return dbQuery {
+            Accesses.insert {
+                it[className] = user.className
+                it[codClass] = user.codClass
+                it[nome] = user.nome
+                it[senha] = user.senha
+                it[email] = user.email
+            }[Accesses.id]
+        }
     }
 
     suspend fun read(id: Int): Acessos? {
@@ -50,7 +57,8 @@ class AcessosService(database: Database) {
                     it[Accesses.className],
                     it[Accesses.codClass],
                     it[Accesses.nome],
-                    it[Accesses.senha]
+                    it[Accesses.senha],
+                    it[Accesses.email]
                 ) }.singleOrNull()
         }
     }
@@ -62,6 +70,7 @@ class AcessosService(database: Database) {
                 it[codClass] = user.codClass
                 it[nome] = user.nome
                 it[senha] = user.senha
+                it[email] = user.senha
             }
         }
     }

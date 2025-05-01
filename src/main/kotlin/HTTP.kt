@@ -8,22 +8,27 @@ import io.ktor.server.plugins.httpsredirect.*
 
 
 fun Application.configureHTTP() {
-    install(HttpsRedirect) {
-            // The port to redirect to. By default 443, the default HTTPS port.
-            sslPort = 443
-            // 301 Moved Permanently, or 302 Found redirect.
-            permanentRedirect = true
-        }
-    install(HSTS) {
-        includeSubDomains = true
-    }
+   /* install(HttpsRedirect) {
+       /*     sslPort = 443
+            permanentRedirect = true*/
+        }*/
+
     install(CORS) {
+        // Métodos permitidos
         allowMethod(HttpMethod.Options)
         allowMethod(HttpMethod.Put)
         allowMethod(HttpMethod.Delete)
         allowMethod(HttpMethod.Patch)
+        allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Get)
+
+        // Headers permitidos
         allowHeader(HttpHeaders.Authorization)
+        allowHeader(HttpHeaders.ContentType)
         allowHeader("MyCustomHeader")
-        anyHost() // @TODO: Don't do this in production if possible. Try to limit it.
+
+        anyHost()
+
+        allowCredentials = true
     }
 }
