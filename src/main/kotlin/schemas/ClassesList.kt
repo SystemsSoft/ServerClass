@@ -1,4 +1,4 @@
-package com.class_erp.schemas
+package schemas
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
@@ -10,7 +10,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 @Serializable
 data class ClassesList(
     val className: String,
-    val codClasse: String,
+    val codClass: String,
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -29,12 +29,13 @@ class ClassesListService(database: Database) {
         }
     }
 
-    suspend fun create(classe: ClassesList): Int = dbQuery {
-        Class.insert {
-            it[className] = classe.className
-            it[codClasse] = classe.codClasse
-
-        }[Class.id]
+    suspend fun create(classe: ClassesList): Int  {
+        return dbQuery {
+            Class.insert {
+                it[className] = classe.className
+                it[codClasse] = classe.codClass
+            }[Class.id]
+        }
     }
 
     suspend fun read(id: Int): ClassesList? {
@@ -52,7 +53,7 @@ class ClassesListService(database: Database) {
         dbQuery {
             Class.update({ Class.id eq id }) {
                 it[className] = classe.className
-                it[codClasse] = classe.codClasse
+                it[codClasse] = classe.codClass
             }
         }
     }
