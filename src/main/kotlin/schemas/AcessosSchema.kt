@@ -1,6 +1,5 @@
 package com.class_erp.schemas
 
-import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
@@ -60,6 +59,20 @@ class AcessosService(database: Database) {
                     it[Accesses.senha],
                     it[Accesses.email]
                 ) }.singleOrNull()
+        }
+    }
+
+    suspend fun readAll(): List<Acessos> {
+        return dbQuery {
+            Accesses.selectAll().map {
+                Acessos(
+                    it[Accesses.className],
+                    it[Accesses.codClass],
+                    it[Accesses.nome],
+                    it[Accesses.senha],
+                    it[Accesses.email]
+                )
+            }
         }
     }
 

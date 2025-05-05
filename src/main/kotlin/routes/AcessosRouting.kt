@@ -24,17 +24,19 @@ fun Application.acessosRouting(serviceAcesso: AcessosService) {
             }
         }
 
-        // Read user
-        get("/acessos/{id}") {
-
+        get("/acessos") {
+            try {
+                val classes = serviceAcesso.readAll()
+                call.respond(HttpStatusCode.OK, classes)
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+            }
         }
 
-        // Update user
         put("/acessos/{id}") {
 
         }
 
-        // Delete user
         delete("/acessos/{id}") {
 
         }

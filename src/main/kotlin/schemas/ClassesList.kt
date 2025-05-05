@@ -38,14 +38,14 @@ class ClassesListService(database: Database) {
         }
     }
 
-    suspend fun read(id: Int): ClassesList? {
+    suspend fun readAll(): List<ClassesList> {
         return dbQuery {
-            Class.selectAll()
-                .where { Class.id eq id }
-                .map { ClassesList(
+            Class.selectAll().map {
+                ClassesList(
                     it[Class.className],
                     it[Class.codClasse]
-                ) }.singleOrNull()
+                )
+            }
         }
     }
 

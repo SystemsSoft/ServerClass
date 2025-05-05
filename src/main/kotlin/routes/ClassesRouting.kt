@@ -25,18 +25,20 @@ fun Application.classesRouting(classesListService: ClassesListService) {
             }
         }
 
-        // Read user
-        get("/acessos/{id}") {
+        get("/classes") {
+            try {
+                val classes = classesListService.readAll()
+                call.respond(HttpStatusCode.OK, classes)
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+            }
+        }
+
+        put("/classes/{id}") {
 
         }
 
-        // Update user
-        put("/acessos/{id}") {
-
-        }
-
-        // Delete user
-        delete("/acessos/{id}") {
+        delete("/classes/{id}") {
 
         }
     }
