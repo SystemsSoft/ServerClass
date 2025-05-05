@@ -16,6 +16,16 @@ data class Acessos(
     val email: String,
 )
 
+@Serializable
+data class AcessosDto(
+    var id: Int,
+    val className: String,
+    val codClass: String,
+    val nome: String,
+    val senha: String,
+    val email: String,
+)
+
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class AcessosService(database: Database) {
     object Accesses : Table() {
@@ -36,7 +46,6 @@ class AcessosService(database: Database) {
     }
 
     suspend fun create(user: Acessos): Int {
-
         return dbQuery {
             Accesses.insert {
                 it[className] = user.className
@@ -62,10 +71,11 @@ class AcessosService(database: Database) {
         }
     }
 
-    suspend fun readAll(): List<Acessos> {
+    suspend fun readAll(): List<AcessosDto> {
         return dbQuery {
             Accesses.selectAll().map {
-                Acessos(
+                AcessosDto(
+                    it[Accesses.id],
                     it[Accesses.className],
                     it[Accesses.codClass],
                     it[Accesses.nome],

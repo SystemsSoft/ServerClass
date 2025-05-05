@@ -26,8 +26,7 @@ fun Application.acessosRouting(serviceAcesso: AcessosService) {
 
         get("/acessos") {
             try {
-                val classes = serviceAcesso.readAll()
-                call.respond(HttpStatusCode.OK, classes)
+                call.respond(HttpStatusCode.OK, serviceAcesso.readAll())
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
             }
