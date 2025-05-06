@@ -12,6 +12,12 @@ data class ClassesList(
     val className: String,
     val codClass: String,
 )
+@Serializable
+data class ClassesListDto(
+    var id: Int,
+    val className: String,
+    val codClass: String,
+)
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class ClassesListService(database: Database) {
@@ -38,10 +44,11 @@ class ClassesListService(database: Database) {
         }
     }
 
-    suspend fun readAll(): List<ClassesList> {
+    suspend fun readAll(): List<ClassesListDto> {
         return dbQuery {
             Class.selectAll().map {
-                ClassesList(
+                ClassesListDto(
+                    it[Class.id],
                     it[Class.className],
                     it[Class.codClasse]
                 )
@@ -49,7 +56,7 @@ class ClassesListService(database: Database) {
         }
     }
 
-    suspend fun update(id: Int, classe: ClassesList) {
+    suspend fun update(id: Int, classe: ClassesListDto) {
         dbQuery {
             Class.update({ Class.id eq id }) {
                 it[className] = classe.className

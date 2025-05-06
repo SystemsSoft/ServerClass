@@ -1,5 +1,6 @@
 package routes
 
+import com.class_erp.schemas.AcessosDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -10,6 +11,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import schemas.ClassesList
+import schemas.ClassesListDto
 import schemas.ClassesListService
 
 fun Application.classesRouting(classesListService: ClassesListService) {
@@ -34,12 +36,27 @@ fun Application.classesRouting(classesListService: ClassesListService) {
             }
         }
 
-        put("/classes/{id}") {
-
+        put("/classes") {
+            try {
+                val classe = call.receive<ClassesListDto>()
+                call.respond(
+                    HttpStatusCode.OK, classesListService.update(
+                        classe.id,
+                        classe
+                    )
+                )
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+            }
         }
 
-        delete("/classes/{id}") {
-
+        delete("/classes") {
+            try {
+                val classe = call.receive<ClassesListDto>()
+                call.respond(HttpStatusCode.OK, classesListService.delete(classe.id))
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+            }
         }
     }
 }
