@@ -1,6 +1,7 @@
 package routes
 
 import com.class_erp.schemas.Acessos
+import com.class_erp.schemas.AcessosDto
 import com.class_erp.schemas.AcessosService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -16,8 +17,7 @@ fun Application.acessosRouting(serviceAcesso: AcessosService) {
     routing {
         post("/acessos") {
             try {
-                val user = call.receive<Acessos>()
-                val id = serviceAcesso.create(user)
+                val id = serviceAcesso.create(call.receive<Acessos>())
                 call.respond(HttpStatusCode.Created, id)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
@@ -32,8 +32,18 @@ fun Application.acessosRouting(serviceAcesso: AcessosService) {
             }
         }
 
-        put("/acessos/{id}") {
-
+        put("/acessos") {
+            try {
+                val acesso = call.receive<AcessosDto>()
+                call.respond(
+                    HttpStatusCode.OK, serviceAcesso.update(
+                        acesso.id,
+                        acesso
+                    )
+                )
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+            }
         }
 
         delete("/acessos/{id}") {

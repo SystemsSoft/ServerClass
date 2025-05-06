@@ -86,14 +86,14 @@ class AcessosService(database: Database) {
         }
     }
 
-    suspend fun update(id: Int, user: Acessos) {
+    suspend fun update(id: Int, user: AcessosDto) {
         dbQuery {
             Accesses.update({ Accesses.id eq id }) {
                 it[className] = user.className
                 it[codClass] = user.codClass
                 it[nome] = user.nome
                 it[senha] = user.senha
-                it[email] = user.senha
+                it[email] = user.email
             }
         }
     }
