@@ -46,8 +46,13 @@ fun Application.acessosRouting(serviceAcesso: AcessosService) {
             }
         }
 
-        delete("/acessos/{id}") {
-
+        delete("/acessos") {
+            try {
+                val acesso = call.receive<AcessosDto>()
+                call.respond(HttpStatusCode.OK, serviceAcesso.delete(acesso.id))
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+            }
         }
     }
 }
