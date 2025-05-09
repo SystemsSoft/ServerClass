@@ -1,6 +1,5 @@
 package routes
 
-import com.class_erp.schemas.AcessosDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -21,7 +20,7 @@ fun Application.classesRouting(classesListService: ClassesListService) {
             try {
                 val classe = call.receive<ClassesList>()
                 val id = classesListService.create(classe)
-                call.respond(HttpStatusCode.Created, id)
+                call.respond(HttpStatusCode.OK, id)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
             }

@@ -18,7 +18,7 @@ fun Application.acessosRouting(serviceAcesso: AcessosService) {
         post("/acessos") {
             try {
                 val id = serviceAcesso.create(call.receive<Acessos>())
-                call.respond(HttpStatusCode.Created, id)
+                call.respond(HttpStatusCode.OK, id)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
             }
