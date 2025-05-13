@@ -10,9 +10,9 @@ import org.jetbrains.exposed.sql.transactions.transaction
 @Serializable
 data class Access(
     val className: String,
-    val codClass: String,
-    val nome: String,
-    val senha: String,
+    val classCode: String,
+    val name: String,
+    val password: String,
     val email: String,
 )
 
@@ -20,9 +20,9 @@ data class Access(
 data class AccessDto(
     var id: Int,
     val className: String,
-    val codClass: String,
-    val nome: String,
-    val senha: String,
+    val classCode: String,
+    val name: String,
+    val password: String,
     val email: String,
 )
 
@@ -49,9 +49,9 @@ class AccessService(database: Database) {
         return dbQuery {
             AccessTable.insert {
                 it[className] = access.className
-                it[classCode] = access.codClass
-                it[name] = access.nome
-                it[password] = access.senha
+                it[classCode] = access.classCode
+                it[name] = access.name
+                it[password] = access.password
                 it[email] = access.email
             }[AccessTable.id]
         }
@@ -90,9 +90,9 @@ class AccessService(database: Database) {
         dbQuery {
             AccessTable.update({ AccessTable.id eq id }) {
                 it[className] = access.className
-                it[classCode] = access.codClass
-                it[name] = access.nome
-                it[password] = access.senha
+                it[classCode] = access.classCode
+                it[name] = access.name
+                it[password] = access.password
                 it[email] = access.email
             }
         }
