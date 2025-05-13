@@ -10,7 +10,9 @@ import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 import routes.acessosRouting
 import routes.classesRouting
+import routes.uploadRouting
 import schemas.ClassesListService
+import schemas.UploadService
 import kotlin.getValue
 
 fun main(args: Array<String>) {
@@ -42,8 +44,10 @@ private fun Application.configureDependencyInjection() {
 private fun Application.configureRouting() {
     val serviceAcesso by inject<AcessosService>()
     val classesListService by inject<ClassesListService>()
+    val uploadListService by inject<UploadService>()
     acessosRouting(serviceAcesso)
     classesRouting(classesListService)
+    uploadRouting(uploadListService)
 }
 
 

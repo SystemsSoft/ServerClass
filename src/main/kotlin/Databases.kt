@@ -2,6 +2,7 @@ import com.class_erp.schemas.AcessosService
 import schemas.ClassesListService
 import org.jetbrains.exposed.sql.Database
 import org.koin.dsl.module
+import schemas.UploadService
 
 object DatabaseConfig {
     val appModule = module {
@@ -16,5 +17,6 @@ object DatabaseConfig {
 
         single { AcessosService(get()) }
         single { ClassesListService(get()) }
+        single { UploadService(get()) }
     }
 }
