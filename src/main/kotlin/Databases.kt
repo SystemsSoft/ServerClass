@@ -1,4 +1,4 @@
-import com.class_erp.schemas.AcessosService
+import com.class_erp.schemas.AccessService
 import schemas.ClassesListService
 import org.jetbrains.exposed.sql.Database
 import org.koin.dsl.module
@@ -15,7 +15,7 @@ object DatabaseConfig {
             )
         }
 
-        single { AcessosService(get()) }
+        single { AccessService(get()) }
         single { ClassesListService(get()) }
         single { UploadService(get()) }
     }

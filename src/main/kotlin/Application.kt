@@ -1,14 +1,14 @@
 package com.class_erp
 
 import DatabaseConfig.appModule
-import com.class_erp.schemas.AcessosService
+import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import org.koin.ktor.ext.inject
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
-import routes.acessosRouting
+import routes.accessRouting
 import routes.classesRouting
 import routes.uploadRouting
 import schemas.ClassesListService
@@ -42,10 +42,10 @@ private fun Application.configureDependencyInjection() {
 }
 
 private fun Application.configureRouting() {
-    val serviceAcesso by inject<AcessosService>()
+    val serviceAccess by inject<AccessService>()
     val classesListService by inject<ClassesListService>()
     val uploadListService by inject<UploadService>()
-    acessosRouting(serviceAcesso)
+    accessRouting(serviceAccess)
     classesRouting(classesListService)
     uploadRouting(uploadListService)
 }

@@ -9,57 +9,57 @@ import org.jetbrains.exposed.sql.transactions.transaction
 @Serializable
 data class UploadList(
     val fileName: String,
-    val codFile: String,
-    val codClass: String,
-    val tipoFile: String,
+    val fileCode: String,
+    val classCode: String,
+    val fileType: String,
 )
 
 @Serializable
 data class UploadListDto(
     val id: Int,
     val fileName: String,
-    val codFile: String,
-    val codClass: String,
-    val tipoFile: String,
+    val fileCode: String,
+    val classCode: String,
+    val fileType: String,
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class UploadService(database: Database) {
-    object Files : Table() {
+    object FilesTable : Table() {
         val id = integer("id").autoIncrement()
 
         val fileName = varchar("fileName", length = 50)
-        val codFile = varchar("codFile",length = 50)
-        val codClass = varchar("codClass",length = 50)
-        val tipoFile = varchar("tipoFile",length = 50)
+        val fileCode = varchar("fileCode",length = 50)
+        val classCode = varchar("classCode",length = 50)
+        val fileType = varchar("fileType",length = 50)
 
         override val primaryKey = PrimaryKey(id)
     }
 
     init {
         transaction(database) {
-            SchemaUtils.create(Files)
+            SchemaUtils.create(FilesTable)
         }
     }
 
     suspend fun create(uplods: UploadList): Int = dbQuery {
-        Files.insert {
+        FilesTable.insert {
             it[fileName] = uplods.fileName
-            it[codFile] = uplods.codFile
-            it[codClass] = uplods.codClass
-            it[tipoFile] = uplods.tipoFile
-        }[Files.id]
+            it[fileCode] = uplods.fileCode
+            it[classCode] = uplods.classCode
+            it[fileType] = uplods.fileType
+        }[FilesTable.id]
     }
 
     suspend fun readAll(): List<UploadListDto> {
         return dbQuery {
-            Files.selectAll().map {
+            FilesTable.selectAll().map {
                 UploadListDto(
-                    it[Files.id],
-                    it[Files.fileName],
-                    it[Files.codFile],
-                    it[Files.codClass],
-                    it[Files.tipoFile],
+                    it[FilesTable.id],
+                    it[FilesTable.fileName],
+                    it[FilesTable.fileCode],
+                    it[FilesTable.classCode],
+                    it[FilesTable.fileType],
                 )
             }
         }
@@ -67,18 +67,18 @@ class UploadService(database: Database) {
 
     suspend fun update(id: Int, uploads: UploadListDto) {
         dbQuery {
-            Files.update({ Files.id eq id }) {
+            FilesTable.update({ FilesTable.id eq id }) {
                 it[fileName] = uploads.fileName
-                it[codFile] = uploads.codFile
-                it[codClass] = uploads.codClass
-                it[tipoFile] = uploads.tipoFile
+                it[fileCode] = uploads.fileCode
+                it[classCode] = uploads.classCode
+                it[fileType] = uploads.fileType
             }
         }
     }
 
     suspend fun delete(id: Int) {
         dbQuery {
-            Files.deleteWhere { Files.id.eq(id) }
+            FilesTable.deleteWhere { FilesTable.id.eq(id) }
         }
     }
 

@@ -9,7 +9,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
-import schemas.ClassesListDto
+import schemas.ClassDto
 import schemas.UploadList
 import schemas.UploadListDto
 import schemas.UploadService
@@ -50,7 +50,7 @@ fun Application.uploadRouting(uploadsService: UploadService) {
 
         delete("/upload") {
             try {
-                val classe = call.receive<ClassesListDto>()
+                val classe = call.receive<UploadListDto>()
                 call.respond(HttpStatusCode.OK, uploadsService.delete(classe.id))
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
