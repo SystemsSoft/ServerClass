@@ -57,20 +57,6 @@ class AccessService(database: Database) {
         }
     }
 
-    suspend fun read(id: Int): Access? {
-        return dbQuery {
-            AccessTable.selectAll()
-                .where { AccessTable.id eq id }
-                .map { Access(
-                    it[AccessTable.className],
-                    it[AccessTable.classCode],
-                    it[AccessTable.name],
-                    it[AccessTable.password],
-                    it[AccessTable.email]
-                ) }.singleOrNull()
-        }
-    }
-
     suspend fun readAll(): List<AccessDto> {
         return dbQuery {
             AccessTable.selectAll().map {

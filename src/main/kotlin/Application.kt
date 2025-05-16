@@ -1,6 +1,7 @@
 package com.class_erp
 
-import DatabaseConfig.appModule
+import DatabaseConfig.appClient
+import DatabaseConfig.appMain
 import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
@@ -10,8 +11,10 @@ import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 import routes.accessRouting
 import routes.classesRouting
+import routes.clientRouting
 import routes.uploadRouting
 import schemas.ClassesListService
+import schemas.ClientService
 import schemas.UploadService
 import kotlin.getValue
 
@@ -23,9 +26,7 @@ fun Application.module() {
     configureContentNegotiation()
     configureDependencyInjection()
     configureRouting()
-    configureSerialization()
     configureHTTP()
-
 }
 
 private fun Application.configureContentNegotiation() {
@@ -37,7 +38,7 @@ private fun Application.configureContentNegotiation() {
 private fun Application.configureDependencyInjection() {
     install(Koin) {
         slf4jLogger()
-        modules(appModule)
+        modules(appMain, appClient)
     }
 }
 
@@ -45,6 +46,9 @@ private fun Application.configureRouting() {
     val serviceAccess by inject<AccessService>()
     val classesListService by inject<ClassesListService>()
     val uploadListService by inject<UploadService>()
+    val clientService: ClientService by inject<ClientService>()
+
+    clientRouting(clientService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
     uploadRouting(uploadListService)
