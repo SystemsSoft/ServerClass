@@ -33,6 +33,7 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.h2)
     implementation(libs.ktor.server.http.redirect)
+    implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.hsts)
     implementation(libs.ktor.server.cors)
     implementation(libs.ktor.server.netty)
