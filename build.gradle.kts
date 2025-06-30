@@ -45,3 +45,7 @@ dependencies {
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
 }
+
+tasks.register("stage") {
+    dependsOn(tasks.jar)
+}
