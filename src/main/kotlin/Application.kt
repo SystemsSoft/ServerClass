@@ -35,10 +35,10 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    configureHTTP()
     configureContentNegotiation()
     configureDependencyInjection()
     configureRouting()
-    configureHTTP()
     configureSockets()
 }
 
