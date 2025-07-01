@@ -1,2 +1,2 @@
-web: java -jar build/libs/server-0.0.1.jar
+web: java -jar build/libs/server-all.jar
 
