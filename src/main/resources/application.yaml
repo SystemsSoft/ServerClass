@@ -3,10 +3,7 @@ ktor:
         modules:
             - com.class_erp.ApplicationKt.module
     deployment:
-
         port: ${PORT}
-
         host: 0.0.0.0
-
     janus:
         baseUrl: "http://localhost:8088/janus"
