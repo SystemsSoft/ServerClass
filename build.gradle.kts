@@ -47,5 +47,5 @@ dependencies {
 }
 
 tasks.register("stage") {
-    dependsOn(tasks.jar)
+    dependsOn(tasks.shadowJar)
 }
