@@ -50,11 +50,9 @@ tasks.shadowJar {
     manifest {
         attributes["Main-Class"] = application.mainClass.get()
     }
-    // Opcional: Para garantir que o JAR gerado tenha o nome exato que seu Procfile espera (server-0.0.1.jar)
-    // Se você estiver usando "server-all.jar" no Procfile, esta linha não é estritamente necessária.
     archiveFileName.set("server-0.0.1.jar")
 }
 
-tasks.register("stage") { // <--- 3. REVERTA ESTE BLOCO
-    dependsOn(tasks.shadowJar) // <--- DEVE DEPENDER DE 'shadowJar', NÃO DE 'installDist'
+tasks.register("stage") {
+    dependsOn(tasks.shadowJar)
 }
