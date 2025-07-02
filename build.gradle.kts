@@ -46,6 +46,4 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
 }
 
-tasks.register("stage") {
-    dependsOn(tasks.shadowJar)
-}
+
