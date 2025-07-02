@@ -48,35 +48,10 @@ private fun Application.configureContentNegotiation() {
     }
 }
 
-private val janusModule = module {
-    single {
-        val appConfig = get<Application>().environment.config
-        appConfig.property("janus.baseUrl").getString()
-    }
-
-    single {
-        HttpClient(CIO) {
-            install(KtorClientContentNegotiation) {
-                json(Json {
-                    ignoreUnknownKeys = true
-                    prettyPrint = true
-                    isLenient = true
-                })
-            }
-            engine {
-                requestTimeout = 30000
-            }
-        }
-    }
-    single {
-        JanusService(get<HttpClient>(), get<String>())
-    }
-}
-
 private fun Application.configureDependencyInjection() {
     install(Koin) {
         slf4jLogger()
-        modules(appMain, appClient,janusModule)
+        modules(appMain, appClient)
     }
 }
 
