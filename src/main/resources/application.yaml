@@ -3,5 +3,4 @@ ktor:
         modules:
             - com.class_erp.ApplicationKt.module
     deployment:
-        port: ${PORT}
         host: 0.0.0.0
