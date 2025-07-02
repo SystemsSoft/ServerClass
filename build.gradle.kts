@@ -46,4 +46,6 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
 }
 
-
+tasks {
+    create("stage").dependsOn("installDist")
+}
