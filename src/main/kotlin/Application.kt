@@ -85,7 +85,6 @@ private fun Application.configureRouting() {
     val classesListService by inject<ClassesListService>()
     val uploadListService by inject<UploadService>()
     val clientService: ClientService by inject<ClientService>()
-    val janusService by inject<JanusService>()
 
     clientRouting(clientService)
     accessRouting(serviceAccess)
