@@ -1,4 +1,4 @@
-package routes
+package routes.classes
 
 import com.class_erp.schemas.Access
 import com.class_erp.schemas.AccessDto

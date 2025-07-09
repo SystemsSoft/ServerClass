@@ -1,33 +1,33 @@
 package com.class_erp
 
 
-import DatabaseConfig.appClient
-import DatabaseConfig.appMain
+import DatabaseConfig.clientModule
+import DatabaseConfig.classModule
+import DatabaseConfig.mecModule
 import com.class_erp.schemas.AccessService
-import com.class_erp.service.JanusService
 import configureSockets
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation // ESTE É O ContentNegotiation DO SERVIDOR
-import org.koin.ktor.ext.inject
-import io.ktor.client.*
-import io.ktor.client.engine.cio.* // ou outro engine que você esteja usando
-
-// --- ADICIONE ESTE IMPORT PARA O PLUGIN DE CLIENTE COM ALIAS ---
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as KtorClientContentNegotiation
-// --- FIM DO NOVO IMPORT ---
-
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import kotlinx.serialization.json.Json
-import org.koin.dsl.module
+import org.koin.ktor.ext.inject
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
-import routes.accessRouting
-import routes.classesRouting
-import routes.clientRouting
-import routes.uploadRouting
+import routes.classes.accessRouting
+import routes.classes.classesRouting
+import routes.classes.clientMecRouting
+import routes.classes.clientRouting
+import routes.classes.expensesRouting
+import routes.classes.pricingTableRouting
+import routes.classes.revenueRouting
+import routes.classes.uploadRouting
 import schemas.ClassesListService
 import schemas.ClientService
 import schemas.UploadService
+import schemas.mec.ClientMecService
+import schemas.mec.ExpenseService
+import schemas.mec.PriceTableMecService
+import schemas.mec.RevenueService
 import kotlin.getValue
 
 fun main(args: Array<String>) {
@@ -39,19 +39,24 @@ fun Application.module() {
     configureContentNegotiation()
     configureDependencyInjection()
     configureRouting()
+    configureRoutingMec()
     configureSockets()
 }
 
-private fun Application.configureContentNegotiation() {
+fun Application.configureContentNegotiation() {
     install(ContentNegotiation) {
-        json()
+        json(Json {
+            prettyPrint = true
+            isLenient = true
+            ignoreUnknownKeys = true
+        })
     }
 }
 
 private fun Application.configureDependencyInjection() {
     install(Koin) {
         slf4jLogger()
-        modules(appMain, appClient)
+        modules(classModule, clientModule, mecModule)
     }
 }
 
@@ -66,5 +71,23 @@ private fun Application.configureRouting() {
     classesRouting(classesListService)
     uploadRouting(uploadListService)
 }
+
+private fun Application.configureRoutingMec() {
+    val clientMec by inject<ClientMecService>()
+    val expenses by inject<ExpenseService>()
+    val revenue by inject<RevenueService>()
+    val pricingTable by inject<PriceTableMecService>()
+
+
+    clientMecRouting(clientMec)
+    expensesRouting(expenses)
+    revenueRouting(revenue)
+    pricingTableRouting(pricingTable)
+}
+
+
+
+
+
 
 

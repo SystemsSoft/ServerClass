@@ -5,9 +5,13 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import schemas.ClientService
 import schemas.UploadService
+import schemas.mec.ClientMecService
+import schemas.mec.ExpenseService
+import schemas.mec.PriceTableMecService
+import schemas.mec.RevenueService
 
 object DatabaseConfig {
-    val appMain = module {
+    val classModule = module {
         single(named("MainDB")) {
 
             Database.connect(
@@ -23,7 +27,7 @@ object DatabaseConfig {
         single { UploadService(get(named("MainDB"))) }
     }
 
-    val appClient = module {
+    val clientModule = module {
         single(named("ClientDB")) {
             Database.connect(
                 url = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/Users",
@@ -34,5 +38,20 @@ object DatabaseConfig {
         }
 
         single { ClientService(get(named("ClientDB"))) }
+    }
+    val mecModule = module {
+        single(named("MecDB")) {
+            Database.connect(
+                url = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/mec",
+                user = "dbmasteruser",
+                driver = "com.mysql.cj.jdbc.Driver",
+                password = "q1w2e3r4"
+            )
+        }
+
+        single { ClientMecService(get(named("MecDB"))) }
+        single { ExpenseService(get(named("MecDB"))) }
+        single { PriceTableMecService(get(named("MecDB"))) }
+        single { RevenueService(get(named("MecDB"))) }
     }
 }

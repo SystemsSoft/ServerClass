@@ -1,4 +1,4 @@
-package routes
+package routes.classes
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode

@@ -1,4 +1,4 @@
-package routes
+package routes.classes
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -9,38 +9,39 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
+import schemas.ClassesList
 import schemas.ClassDto
-import schemas.UploadList
-import schemas.UploadListDto
-import schemas.UploadService
+import schemas.ClassesListService
 
-fun Application.uploadRouting(uploadsService: UploadService) {
+fun Application.classesRouting(classesListService: ClassesListService) {
     routing {
 
-        post("/upload") {
+        post("/classes") {
             try {
-                val id = uploadsService.create(call.receive<UploadList>())
+                val classe = call.receive<ClassesList>()
+                val id = classesListService.create(classe)
                 call.respond(HttpStatusCode.OK, id)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
             }
         }
 
-        get("/upload") {
+        get("/classes") {
             try {
-                call.respond(HttpStatusCode.OK, uploadsService.readAll())
+                val classes = classesListService.readAll()
+                call.respond(HttpStatusCode.OK, classes)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
             }
         }
 
-        put("/upload") {
+        put("/classes") {
             try {
-                val upload = call.receive<UploadListDto>()
+                val classe = call.receive<ClassDto>()
                 call.respond(
-                    HttpStatusCode.OK, uploadsService.update(
-                        upload.id,
-                        upload
+                    HttpStatusCode.OK, classesListService.update(
+                        classe.id,
+                        classe
                     )
                 )
             } catch (e: Throwable) {
@@ -48,10 +49,10 @@ fun Application.uploadRouting(uploadsService: UploadService) {
             }
         }
 
-        delete("/upload") {
+        delete("/classes") {
             try {
-                val classe = call.receive<UploadListDto>()
-                call.respond(HttpStatusCode.OK, uploadsService.delete(classe.id))
+                val classe = call.receive<ClassDto>()
+                call.respond(HttpStatusCode.OK, classesListService.delete(classe.id))
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
             }
