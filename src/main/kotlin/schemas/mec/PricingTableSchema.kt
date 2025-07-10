@@ -13,20 +13,17 @@ import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq // Important import for 'eq'
 import org.jetbrains.exposed.sql.deleteWhere
 
-// No longer needed: import schemas.ClassesListService.ClassTable
-// No longer needed: import kotlin.uuid.ExperimentalUuidApi // Not used here
-
 @Serializable
 data class PriceTableMec(
     val name: String,
-    val price: String, // Consider changing to Double if purely numeric
+    val price: String,
 )
 
 @Serializable
 data class PriceTableMecDto(
     var id: Int,
     var name: String,
-    var price: String // Consider changing to Double if purely numeric
+    var price: String
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -34,7 +31,7 @@ class PriceTableMecService(private val db: Database) {
     object PriceTableMec : Table() {
         val id = integer("id").autoIncrement()
         val name = varchar("name", length = 50)
-        val price = varchar("price", length = 50) // Consider changing to double or decimal
+        val price = varchar("price", length = 50)
         override val primaryKey = PrimaryKey(id)
     }
 
@@ -67,16 +64,16 @@ class PriceTableMecService(private val db: Database) {
 
     suspend fun update(id: Int, priceTableMec: PriceTableMecDto) {
         dbQuery {
-            PriceTableMec.update({ PriceTableMec.id eq id }) { // CORRECTED: Changed ClassTable.id to PriceTableMec.id
+            PriceTableMec.update({ PriceTableMec.id eq id }) {
                 it[name] = priceTableMec.name
-                it[price] = priceTableMec.price // CORRECTED: Changed priceTableMec.name to priceTableMec.price
+                it[price] = priceTableMec.price
             }
         }
     }
 
     suspend fun delete(id: Int) {
         dbQuery {
-            PriceTableMec.deleteWhere { PriceTableMec.id.eq(id) } // Added delete function for completeness
+            PriceTableMec.deleteWhere { PriceTableMec.id.eq(id) }
         }
     }
 

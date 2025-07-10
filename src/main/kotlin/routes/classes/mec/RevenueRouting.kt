@@ -1,4 +1,4 @@
-package routes.classes // Consider changing to 'routes.financial' or 'routes.revenue' for better organization
+package routes.classes
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -13,19 +13,18 @@ import schemas.mec.Revenue
 import schemas.mec.RevenueDto
 import schemas.mec.RevenueService
 
-fun Application.revenueRouting(revenueService: RevenueService) { // Renamed parameter for clarity
+fun Application.revenueRouting(revenueService: RevenueService) {
     routing {
         post("/revenues") {
             try {
                 val revenue = call.receive<Revenue>()
                 val id = revenueService.create(revenue)
-                call.respond(HttpStatusCode.Created, id) // Use HttpStatusCode.Created for successful creation
+                call.respond(HttpStatusCode.Created, id)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Error processing JSON for revenue: ${e.message}")
             }
         }
 
-        // Route to read all revenue records
         get("/revenues") {
             try {
                 val revenues = revenueService.readAll()
@@ -35,7 +34,6 @@ fun Application.revenueRouting(revenueService: RevenueService) { // Renamed para
             }
         }
 
-        // Route to update an existing revenue record
         put("/revenues") {
             try {
                 val revenue = call.receive<RevenueDto>()
@@ -46,17 +44,17 @@ fun Application.revenueRouting(revenueService: RevenueService) { // Renamed para
             }
         }
 
-        delete("/revenues") {
+        delete("/revenues/{id}") {
             try {
                 val id = call.parameters["id"]?.toIntOrNull()
                 if (id == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Invalid expense ID")
+                    call.respond(HttpStatusCode.BadRequest, "Invalid revenue ID")
                     return@delete
                 }
                 revenueService.delete(id)
-                call.respond(HttpStatusCode.OK, "Expense deleted successfully!")
+                call.respond(HttpStatusCode.OK, "Revenue deleted successfully!")
             } catch (e: Throwable) {
-                call.respond(HttpStatusCode.InternalServerError, "Error deleting expense: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, "Error deleting revenue: ${e.message}")
             }
         }
     }

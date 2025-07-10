@@ -47,7 +47,7 @@ fun Application.expensesRouting(expenseService: ExpenseService) { // Renamed par
             }
         }
 
-        delete("/expenses") {
+        delete("/expenses/{id}") {
             val id = call.parameters["id"]?.toIntOrNull()
             if (id == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid expense ID")
