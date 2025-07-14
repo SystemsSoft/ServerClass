@@ -27,7 +27,7 @@ data class AccessDto(
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
-class AccessService(database: Database) {
+class AccessService(private val database: Database) {
     object AccessTable : Table() {
         val id = integer("id").autoIncrement()
         val className = varchar("className", length = 50)
@@ -91,6 +91,5 @@ class AccessService(database: Database) {
     }
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
-        newSuspendedTransaction(Dispatchers.IO) { block() }
+        newSuspendedTransaction(Dispatchers.IO, database) { block() }
 }
-

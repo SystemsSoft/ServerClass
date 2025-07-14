@@ -25,7 +25,7 @@ data class RevenueDto(
 
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
-class RevenueService(database: Database) {
+class RevenueService(private val database: Database) {
     object RevenueTable : Table() {
         val id = integer("id").autoIncrement()
         val name = varchar("name", length = 100)
@@ -83,5 +83,5 @@ class RevenueService(database: Database) {
     }
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
-        newSuspendedTransaction(Dispatchers.IO) { block() }
+        newSuspendedTransaction(Dispatchers.IO,database) { block() }
 }

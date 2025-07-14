@@ -8,13 +8,11 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 
-// --- Data Classes ---
-
 @Serializable
 data class Expense(
     val name: String,
     val value: Double,
-    val date: String // Representing DateTime as String for serialization simplicity, adjust as needed
+    val date: String
 )
 
 @Serializable
@@ -22,14 +20,12 @@ data class ExpenseDto(
     var id: Int,
     val name: String,
     val value: Double,
-    val date: String // Representing DateTime as String for serialization simplicity, adjust as needed
+    val date: String
 )
 
-// --- Service Class ---
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
-class ExpenseService(database: Database) {
-    // --- Table Object ---
+class ExpenseService(private val database: Database) {
     object ExpenseTable : Table() {
         val id = integer("id").autoIncrement()
         val name = varchar("name", length = 100)
@@ -89,5 +85,5 @@ class ExpenseService(database: Database) {
 
     // --- Database Query Helper ---
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
-        newSuspendedTransaction(Dispatchers.IO) { block() }
+        newSuspendedTransaction(Dispatchers.IO,database) { block() }
 }

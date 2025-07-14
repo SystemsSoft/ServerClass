@@ -20,7 +20,7 @@ data class ClassDto(
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
-class ClassesListService(database: Database) {
+class ClassesListService(private val database: Database) {
     object ClassTable : Table() {
         val id = integer("id").autoIncrement()
         val className = varchar("className", length = 50)
@@ -72,6 +72,6 @@ class ClassesListService(database: Database) {
     }
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
-        newSuspendedTransaction(Dispatchers.IO) { block() }
+        newSuspendedTransaction(Dispatchers.IO, database) { block() }
 }
 

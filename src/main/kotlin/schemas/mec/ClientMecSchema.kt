@@ -56,8 +56,8 @@ class ClientMecService(private val db: Database) {
             ClientMecTable.selectAll().map {
                 ClientMecDto(
                     it[ClientMecTable.id],
-                    it[ClientMecTable.name], // Explicitly reference ClientMecTable.name
-                    it[ClientMecTable.phone] // Explicitly reference ClientMecTable.phone
+                    it[ClientMecTable.name],
+                    it[ClientMecTable.phone]
                 )
             }
         }
@@ -65,7 +65,7 @@ class ClientMecService(private val db: Database) {
 
     suspend fun update(id: Int, client: ClientMecDto) {
         dbQuery {
-            ClientMecTable.update({ ClientMecTable.id eq id }) { // CORRECTED: Changed ClassTable.id to ClientMecTable.id
+            ClientMecTable.update({ ClientMecTable.id eq id }) {
                 it[name] = client.name
                 it[phone] = client.phone
             }

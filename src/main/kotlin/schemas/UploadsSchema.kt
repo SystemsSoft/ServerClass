@@ -24,7 +24,7 @@ data class UploadListDto(
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
-class UploadService(database: Database) {
+class UploadService(private val database: Database) {
     object FilesTable : Table() {
         val id = integer("id").autoIncrement()
 
@@ -83,6 +83,6 @@ class UploadService(database: Database) {
     }
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
-        newSuspendedTransaction(Dispatchers.IO) { block() }
+        newSuspendedTransaction(Dispatchers.IO,database) { block() }
 }
 
