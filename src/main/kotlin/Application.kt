@@ -4,6 +4,7 @@ package com.class_erp
 import DatabaseConfig.clientModule
 import DatabaseConfig.classModule
 import DatabaseConfig.mecModule
+import UploadService
 import com.class_erp.schemas.AccessService
 import configureSockets
 import io.ktor.serialization.kotlinx.json.json
@@ -23,7 +24,6 @@ import routes.classes.revenueRouting
 import routes.classes.uploadRouting
 import schemas.ClassesListService
 import schemas.ClientService
-import schemas.UploadService
 import schemas.mec.ClientMecService
 import schemas.mec.ExpenseService
 import schemas.mec.PriceTableMecService

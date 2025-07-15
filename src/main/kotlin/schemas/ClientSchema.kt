@@ -10,11 +10,8 @@ import org.jetbrains.exposed.sql.selectAll
 
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
-import schemas.UploadService.FilesTable
 import java.util.UUID
-import kotlin.random.Random
 import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 @Serializable
 data class Client(

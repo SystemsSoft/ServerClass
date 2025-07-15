@@ -1,5 +1,8 @@
 package routes.classes
 
+import UploadList
+import UploadListDto
+import UploadService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -9,9 +12,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
-import schemas.UploadList
-import schemas.UploadListDto
-import schemas.UploadService
+
 
 fun Application.uploadRouting(uploadsService: UploadService) {
     routing {
@@ -32,6 +33,24 @@ fun Application.uploadRouting(uploadsService: UploadService) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
             }
         }
+
+        get("/upload/filter") {
+            try {
+                val classCode = call.request.queryParameters["classCode"]
+                val fileType = call.request.queryParameters["fileType"]
+
+                if (classCode == null || fileType == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Parâmetros 'classCode' e 'fileType' são obrigatórios.")
+                    return@get
+                }
+
+                val filteredUploads = uploadsService.readFiltered(classCode, fileType)
+                call.respond(HttpStatusCode.OK, filteredUploads)
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar uploads filtrados: ${e.message}")
+            }
+        }
+
 
         put("/upload") {
             try {

@@ -1,4 +1,3 @@
-package schemas
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
@@ -62,6 +61,22 @@ class UploadService(private val database: Database) {
                     it[FilesTable.fileType],
                 )
             }
+        }
+    }
+
+    suspend fun readFiltered(classCode: String, fileType: String): List<UploadListDto> {
+        return dbQuery {
+            FilesTable.selectAll()
+                .where { (FilesTable.classCode eq classCode) and (FilesTable.fileType eq fileType) }
+                .map {
+                    UploadListDto(
+                        it[FilesTable.id],
+                        it[FilesTable.fileName],
+                        it[FilesTable.fileCode],
+                        it[FilesTable.classCode],
+                        it[FilesTable.fileType],
+                    )
+                }
         }
     }
 
