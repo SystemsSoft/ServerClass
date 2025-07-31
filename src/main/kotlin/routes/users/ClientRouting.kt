@@ -28,19 +28,21 @@ fun Application.clientRouting(clientService: ClientService) {
         post("/auth") {
             try {
                 val user = call.receive<User>()
+                var isAuthenticated = false
                 val userList = clientService.readAll()
-                val authenticatedUser = userList.firstOrNull { it.name == user.name && it.password == user.password }
+                val isUser = userList.filter { it.password == user.password }
 
-                if (authenticatedUser != null) {
-                    call.respond(HttpStatusCode.OK, authenticatedUser)
-                } else {
-                    call.respond(HttpStatusCode.Unauthorized, "Usuário ou senha incorretos.")
+                if (isUser.isNotEmpty()) {
+                    isAuthenticated = isUser.any{ it.license }
                 }
+
+                call.respond(HttpStatusCode.OK, isAuthenticated)
 
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
             }
         }
+
 
         get("/") {
             val resourceStream = this::class.java.classLoader.getResourceAsStream("client_form.html")

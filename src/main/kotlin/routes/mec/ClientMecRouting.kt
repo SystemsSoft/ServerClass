@@ -1,6 +1,4 @@
-import ClientMec
-import ClientMecDto
-import ClientMecService
+
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -10,12 +8,10 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
-import io.ktor.server.request.queryString // Importação necessária para pegar parâmetros de URL
-import io.ktor.server.application.call
+
 
 fun Application.clientMecRouting(clientMecService: ClientMecService) {
     routing {
-        // Rota para CRIAR um novo cliente
         post("/clients/mec") {
             try {
                 val client = call.receive<ClientMec>()
@@ -26,7 +22,6 @@ fun Application.clientMecRouting(clientMecService: ClientMecService) {
             }
         }
 
-        // Rota para LER todos os clientes de um usuário específico
         get("/clients/mec") {
             try {
                 // Tenta obter o userId da query string. Se não houver, retorna erro.
@@ -40,7 +35,6 @@ fun Application.clientMecRouting(clientMecService: ClientMecService) {
             }
         }
 
-        // Rota para ATUALIZAR um cliente existente, garantindo que ele pertença ao userId
         put("/clients/mec") {
             try {
                 val client = call.receive<ClientMecDto>()
@@ -52,7 +46,6 @@ fun Application.clientMecRouting(clientMecService: ClientMecService) {
             }
         }
 
-        // Rota para EXCLUIR um cliente, garantindo que ele pertença ao userId
         delete("/clients/mec") {
             try {
                 val client = call.receive<ClientMecDto>()
