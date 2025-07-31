@@ -1,10 +1,13 @@
 package com.class_erp
 
 
+import ClientMecService
 import DatabaseConfig.clientModule
 import DatabaseConfig.classModule
 import DatabaseConfig.mecModule
+import ExpenseService
 import UploadService
+import clientMecRouting
 import com.class_erp.schemas.AccessService
 import configureSockets
 import io.ktor.serialization.kotlinx.json.json
@@ -16,7 +19,6 @@ import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 import routes.`class`.accessRouting
 import routes.`class`.classesRouting
-import routes.`class`.clientMecRouting
 import routes.users.clientRouting
 import routes.`class`.expensesRouting
 import routes.`class`.pricingTableRouting
@@ -24,8 +26,7 @@ import routes.`class`.revenueRouting
 import routes.`class`.uploadRouting
 import schemas.classes.ClassesListService
 import schemas.users.ClientService
-import schemas.mec.ClientMecService
-import schemas.mec.ExpenseService
+
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
 import kotlin.getValue

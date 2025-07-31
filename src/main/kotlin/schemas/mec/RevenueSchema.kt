@@ -12,7 +12,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 data class Revenue(
     val name: String,
     val value: Double,
-    val date: String
+    val date: String,
+    val userId: Int
 )
 
 @Serializable
@@ -20,7 +21,8 @@ data class RevenueDto(
     var id: Int,
     val name: String,
     val value: Double,
-    val date: String
+    val date: String,
+    val userId: Int
 )
 
 
@@ -32,6 +34,7 @@ class RevenueService(private val database: Database) {
 
         val value = double("value")
         val date = varchar("date", length = 50)
+        val userId = integer("userId") // Nova coluna
 
         override val primaryKey = PrimaryKey(id)
     }
@@ -49,6 +52,7 @@ class RevenueService(private val database: Database) {
                 it[name] = revenue.name
                 it[value] = revenue.value
                 it[date] = revenue.date
+                it[userId] = revenue.userId
             }[RevenueTable.id]
         }
     }
@@ -60,7 +64,8 @@ class RevenueService(private val database: Database) {
                     it[RevenueTable.id],
                     it[RevenueTable.name],
                     it[RevenueTable.value],
-                    it[RevenueTable.date]
+                    it[RevenueTable.date],
+                    it[RevenueTable.userId]
                 )
             }
         }
@@ -72,6 +77,7 @@ class RevenueService(private val database: Database) {
                 it[name] = revenue.name
                 it[value] = revenue.value
                 it[date] = revenue.date
+                it[userId] = revenue.userId
             }
         }
     }

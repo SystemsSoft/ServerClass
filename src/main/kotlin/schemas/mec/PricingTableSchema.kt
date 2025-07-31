@@ -17,13 +17,15 @@ import org.jetbrains.exposed.sql.deleteWhere
 data class PriceTableMec(
     val name: String,
     val price: String,
+    val userId: Int // Novo campo
 )
 
 @Serializable
 data class PriceTableMecDto(
     var id: Int,
     var name: String,
-    var price: String
+    var price: String,
+    var userId: Int
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -32,6 +34,7 @@ class PriceTableMecService(private val db: Database) {
         val id = integer("id").autoIncrement()
         val name = varchar("name", length = 50)
         val price = varchar("price", length = 50)
+        val userId = integer("userId") // Nova coluna
         override val primaryKey = PrimaryKey(id)
     }
 
@@ -46,6 +49,7 @@ class PriceTableMecService(private val db: Database) {
             PriceTableMec.insert {
                 it[name] = pricingEntry.name
                 it[price] = pricingEntry.price
+                it[userId] = pricingEntry.userId
             }[PriceTableMec.id]
         }
     }
@@ -56,7 +60,8 @@ class PriceTableMecService(private val db: Database) {
                 PriceTableMecDto(
                     it[PriceTableMec.id],
                     it[PriceTableMec.name],
-                    it[PriceTableMec.price]
+                    it[PriceTableMec.price],
+                    it[PriceTableMec.userId]
                 )
             }
         }
@@ -67,6 +72,7 @@ class PriceTableMecService(private val db: Database) {
             PriceTableMec.update({ PriceTableMec.id eq id }) {
                 it[name] = priceTableMec.name
                 it[price] = priceTableMec.price
+                it[userId] = priceTableMec.userId
             }
         }
     }

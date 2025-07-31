@@ -1,5 +1,8 @@
 package routes.`class` // Consider changing to 'routes.financial' or 'routes.expenses' for better organization
 
+import Expense
+import ExpenseDto
+import ExpenseService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -9,9 +12,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
-import schemas.mec.Expense
-import schemas.mec.ExpenseDto
-import schemas.mec.ExpenseService
+
 
 fun Application.expensesRouting(expenseService: ExpenseService) { // Renamed parameter for clarity
     routing {

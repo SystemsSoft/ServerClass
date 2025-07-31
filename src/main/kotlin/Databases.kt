@@ -4,8 +4,6 @@ import org.jetbrains.exposed.sql.Database
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import schemas.users.ClientService
-import schemas.mec.ClientMecService
-import schemas.mec.ExpenseService
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
 

@@ -1,6 +1,3 @@
-package schemas.mec
-
-
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
@@ -12,7 +9,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 data class Expense(
     val name: String,
     val value: Double,
-    val date: String
+    val date: String,
+    val userId: Int
 )
 
 @Serializable
@@ -20,7 +18,8 @@ data class ExpenseDto(
     var id: Int,
     val name: String,
     val value: Double,
-    val date: String
+    val date: String,
+    val userId: Int
 )
 
 
@@ -30,19 +29,18 @@ class ExpenseService(private val database: Database) {
         val id = integer("id").autoIncrement()
         val name = varchar("name", length = 100)
         val value = double("value")
-        val date = varchar("date", length = 50) // Storing date as String, consider using `datetime` for JodaTime
+        val date = varchar("date", length = 50)
+        val userId = integer("userId") // Nova coluna
 
         override val primaryKey = PrimaryKey(id)
     }
 
-    // --- Initialization ---
     init {
         transaction(database) {
             SchemaUtils.create(ExpenseTable)
         }
     }
 
-    // --- CRUD Operations ---
 
     suspend fun create(expense: Expense): Int {
         return dbQuery {
@@ -50,6 +48,7 @@ class ExpenseService(private val database: Database) {
                 it[name] = expense.name
                 it[value] = expense.value
                 it[date] = expense.date
+                it[userId] = expense.userId
             }[ExpenseTable.id]
         }
     }
@@ -61,7 +60,8 @@ class ExpenseService(private val database: Database) {
                     it[ExpenseTable.id],
                     it[ExpenseTable.name],
                     it[ExpenseTable.value],
-                    it[ExpenseTable.date]
+                    it[ExpenseTable.date],
+                    it[ExpenseTable.userId]
                 )
             }
         }
@@ -73,6 +73,7 @@ class ExpenseService(private val database: Database) {
                 it[name] = expense.name
                 it[value] = expense.value
                 it[date] = expense.date
+                it[userId] = expense.userId
             }
         }
     }
@@ -83,7 +84,6 @@ class ExpenseService(private val database: Database) {
         }
     }
 
-    // --- Database Query Helper ---
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
         newSuspendedTransaction(Dispatchers.IO,database) { block() }
 }
