@@ -1,9 +1,9 @@
 import com.class_erp.schemas.AccessService
-import schemas.ClassesListService
+import schemas.classes.ClassesListService
 import org.jetbrains.exposed.sql.Database
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
-import schemas.ClientService
+import schemas.users.ClientService
 import schemas.mec.ClientMecService
 import schemas.mec.ExpenseService
 import schemas.mec.PriceTableMecService

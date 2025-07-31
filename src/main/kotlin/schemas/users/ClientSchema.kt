@@ -1,4 +1,4 @@
-package schemas
+package schemas.users
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable

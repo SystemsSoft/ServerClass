@@ -1,4 +1,4 @@
-package routes.classes
+package routes.`class`
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application

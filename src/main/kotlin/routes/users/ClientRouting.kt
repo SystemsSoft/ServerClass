@@ -1,4 +1,4 @@
-package routes.classes
+package routes.users
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -9,9 +9,9 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import schemas.Client
-import schemas.ClientService
-import schemas.User
+import schemas.users.Client
+import schemas.users.ClientService
+import schemas.users.User
 
 
 fun Application.clientRouting(clientService: ClientService) {

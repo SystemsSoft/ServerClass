@@ -1,4 +1,4 @@
-package routes.classes
+package routes.`class`
 
 import UploadList
 import UploadListDto

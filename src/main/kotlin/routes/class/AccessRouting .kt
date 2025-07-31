@@ -1,5 +1,8 @@
-package routes.classes
+package routes.`class`
 
+import com.class_erp.schemas.Access
+import com.class_erp.schemas.AccessDto
+import com.class_erp.schemas.AccessService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -9,39 +12,33 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
-import schemas.ClassesList
-import schemas.ClassDto
-import schemas.ClassesListService
 
-fun Application.classesRouting(classesListService: ClassesListService) {
+fun Application.accessRouting(accessService: AccessService) {
     routing {
-
-        post("/classes") {
+        post("/access") {
             try {
-                val classe = call.receive<ClassesList>()
-                val id = classesListService.create(classe)
+                val id = accessService.create(call.receive<Access>())
                 call.respond(HttpStatusCode.OK, id)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
             }
         }
 
-        get("/classes") {
+        get("/access") {
             try {
-                val classes = classesListService.readAll()
-                call.respond(HttpStatusCode.OK, classes)
+                call.respond(HttpStatusCode.OK, accessService.readAll())
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
             }
         }
 
-        put("/classes") {
+        put("/access") {
             try {
-                val classe = call.receive<ClassDto>()
+                val access = call.receive<AccessDto>()
                 call.respond(
-                    HttpStatusCode.OK, classesListService.update(
-                        classe.id,
-                        classe
+                    HttpStatusCode.OK, accessService.update(
+                        access.id,
+                        access
                     )
                 )
             } catch (e: Throwable) {
@@ -49,10 +46,10 @@ fun Application.classesRouting(classesListService: ClassesListService) {
             }
         }
 
-        delete("/classes") {
+        delete("/access") {
             try {
-                val classe = call.receive<ClassDto>()
-                call.respond(HttpStatusCode.OK, classesListService.delete(classe.id))
+                val access = call.receive<AccessDto>()
+                call.respond(HttpStatusCode.OK, accessService.delete(access.id))
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
             }

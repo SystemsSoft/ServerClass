@@ -1,4 +1,4 @@
-package routes.classes // Consider changing to 'routes.financial' or 'routes.expenses' for better organization
+package routes.`class` // Consider changing to 'routes.financial' or 'routes.expenses' for better organization
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application

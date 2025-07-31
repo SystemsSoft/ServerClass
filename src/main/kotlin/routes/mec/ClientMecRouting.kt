@@ -1,4 +1,4 @@
-package routes.classes // Keeping the same package as your example, but consider 'routes.mec' for better organization
+package routes.`class` // Keeping the same package as your example, but consider 'routes.mec' for better organization
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
