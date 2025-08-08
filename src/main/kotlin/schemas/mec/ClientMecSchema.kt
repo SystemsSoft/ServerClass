@@ -16,7 +16,7 @@ import org.jetbrains.exposed.sql.and
 data class ClientMec(
     val name: String,
     val phone: String,
-    val userId: Int
+    val userId: String
 )
 
 @Serializable
@@ -24,7 +24,7 @@ data class ClientMecDto(
     var id: Int,
     var name: String,
     var phone: String,
-    var userId: Int
+    val userId: String
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -33,7 +33,7 @@ class ClientMecService(private val db: Database) {
         val id = integer("id").autoIncrement()
         val name = varchar("name", length = 50)
         val phone = varchar("phone", length = 50)
-        val userId = integer("userId")
+        val userId = varchar("userId",length = 50)
         override val primaryKey = PrimaryKey(id)
     }
 
@@ -53,10 +53,9 @@ class ClientMecService(private val db: Database) {
         }
     }
 
-    // Ajustado para filtrar clientes por userId
-    suspend fun readAll(userId: Int): List<ClientMecDto> {
+    suspend fun readAll(userId: String): List<ClientMecDto> {
         return dbQuery {
-            ClientMecTable.selectAll().where { ClientMecTable.userId eq userId }.map {
+            ClientMecTable.selectAll().where { ClientMecTable.userId eq  userId }.map {
                 ClientMecDto(
                     it[ClientMecTable.id],
                     it[ClientMecTable.name],
@@ -67,7 +66,6 @@ class ClientMecService(private val db: Database) {
         }
     }
 
-    // Ajustado para garantir que o cliente a ser atualizado pertence ao userId
     suspend fun update(id: Int, client: ClientMecDto) {
         dbQuery {
             ClientMecTable.update({ (ClientMecTable.id eq id) and (ClientMecTable.userId eq client.userId) }) {
@@ -77,8 +75,7 @@ class ClientMecService(private val db: Database) {
         }
     }
 
-    // Ajustado para garantir que o cliente a ser excluído pertence ao userId
-    suspend fun delete(id: Int, userId: Int) {
+    suspend fun delete(id: Int, userId: String) {
         dbQuery {
             ClientMecTable.deleteWhere { (ClientMecTable.id eq id) and (ClientMecTable.userId eq userId) }
         }
