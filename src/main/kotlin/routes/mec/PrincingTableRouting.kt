@@ -28,7 +28,8 @@ fun Application.pricingTableRouting(priceTableMecService: PriceTableMecService) 
 
         get("/pricing/mec") {
             try {
-                val pricingEntries = priceTableMecService.readAll()
+                val idLicense = call.request.queryParameters["idLicense"] ?: return@get call.respond(HttpStatusCode.BadRequest, "idLicense não fornecido")
+                val pricingEntries = priceTableMecService.readAll(idLicense)
                 call.respond(HttpStatusCode.OK, pricingEntries)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar tabela de preços MEC: ${e.message}")

@@ -30,7 +30,8 @@ fun Application.expensesRouting(expenseService: ExpenseService) { // Renamed par
         // Route to read all expenses
         get("/expenses") {
             try {
-                val expenses = expenseService.readAll()
+                val idLicense = call.request.queryParameters["idLicense"] ?: return@get call.respond(HttpStatusCode.BadRequest, "idLicense não fornecido")
+                val expenses = expenseService.readAll(idLicense)
                 call.respond(HttpStatusCode.OK, expenses)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Error fetching expenses: ${e.message}")
@@ -49,13 +50,15 @@ fun Application.expensesRouting(expenseService: ExpenseService) { // Renamed par
         }
 
         delete("/expenses/{id}") {
-            val id = call.parameters["id"]?.toIntOrNull()
-            if (id == null) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid expense ID")
-                return@delete
+            try {
+                val expense = call.receive<ExpenseDto>()
+                expenseService.delete(expense.id,expense.userId)
+                call.respond(HttpStatusCode.OK, "Expense deleted successfully!")
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao excluir despesa: ${e.message}")
             }
-            expenseService.delete(id)
-            call.respond(HttpStatusCode.OK, "Expense deleted successfully!")
+
+
         }
     }
 }

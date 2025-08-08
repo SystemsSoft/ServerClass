@@ -1,5 +1,6 @@
 package schemas.mec
 
+import ClientMecService.ClientMecTable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.Database
@@ -11,13 +12,14 @@ import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransacti
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq // Important import for 'eq'
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 
 @Serializable
 data class PriceTableMec(
     val name: String,
     val price: String,
-    val userId: Int // Novo campo
+    val userId: String // Novo campo
 )
 
 @Serializable
@@ -25,7 +27,7 @@ data class PriceTableMecDto(
     var id: Int,
     var name: String,
     var price: String,
-    var userId: Int
+    var userId: String
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -34,7 +36,7 @@ class PriceTableMecService(private val db: Database) {
         val id = integer("id").autoIncrement()
         val name = varchar("name", length = 50)
         val price = varchar("price", length = 50)
-        val userId = integer("userId") // Nova coluna
+        val userId = varchar("userId",length = 50)
         override val primaryKey = PrimaryKey(id)
     }
 
@@ -54,9 +56,9 @@ class PriceTableMecService(private val db: Database) {
         }
     }
 
-    suspend fun readAll(): List<PriceTableMecDto> {
+    suspend fun readAll(userId: String): List<PriceTableMecDto> {
         return dbQuery {
-            PriceTableMec.selectAll().map {
+            PriceTableMec.selectAll().where{ PriceTableMec.userId eq userId }.map {
                 PriceTableMecDto(
                     it[PriceTableMec.id],
                     it[PriceTableMec.name],
@@ -69,7 +71,7 @@ class PriceTableMecService(private val db: Database) {
 
     suspend fun update(id: Int, priceTableMec: PriceTableMecDto) {
         dbQuery {
-            PriceTableMec.update({ PriceTableMec.id eq id }) {
+            PriceTableMec.update({ (PriceTableMec.id eq id) and (PriceTableMec.userId eq priceTableMec.userId) }) {
                 it[name] = priceTableMec.name
                 it[price] = priceTableMec.price
                 it[userId] = priceTableMec.userId

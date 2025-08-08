@@ -1,5 +1,6 @@
 package routes.`class`
 
+import ClientMecDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -27,7 +28,8 @@ fun Application.revenueRouting(revenueService: RevenueService) {
 
         get("/revenues") {
             try {
-                val revenues = revenueService.readAll()
+                val idLicense = call.request.queryParameters["idLicense"] ?: return@get call.respond(HttpStatusCode.BadRequest, "idLicense não fornecido")
+                val revenues = revenueService.readAll(idLicense)
                 call.respond(HttpStatusCode.OK, revenues)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Error fetching revenues: ${e.message}")
@@ -46,12 +48,9 @@ fun Application.revenueRouting(revenueService: RevenueService) {
 
         delete("/revenues/{id}") {
             try {
-                val id = call.parameters["id"]?.toIntOrNull()
-                if (id == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Invalid revenue ID")
-                    return@delete
-                }
-                revenueService.delete(id)
+                val revenue = call.receive<RevenueDto>()
+
+                revenueService.delete(revenue.id,revenue.userId)
                 call.respond(HttpStatusCode.OK, "Revenue deleted successfully!")
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Error deleting revenue: ${e.message}")

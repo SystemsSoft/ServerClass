@@ -1,5 +1,6 @@
 package schemas.mec
 
+import ClientMecService.ClientMecTable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
@@ -13,7 +14,7 @@ data class Revenue(
     val name: String,
     val value: Double,
     val date: String,
-    val userId: Int
+    val userId: String
 )
 
 @Serializable
@@ -22,7 +23,7 @@ data class RevenueDto(
     val name: String,
     val value: Double,
     val date: String,
-    val userId: Int
+    val userId: String
 )
 
 
@@ -34,7 +35,7 @@ class RevenueService(private val database: Database) {
 
         val value = double("value")
         val date = varchar("date", length = 50)
-        val userId = integer("userId") // Nova coluna
+        val userId = varchar("userId",length = 50)
 
         override val primaryKey = PrimaryKey(id)
     }
@@ -57,9 +58,9 @@ class RevenueService(private val database: Database) {
         }
     }
 
-    suspend fun readAll(): List<RevenueDto> {
+    suspend fun readAll(userId: String): List<RevenueDto> {
         return dbQuery {
-            RevenueTable.selectAll().map {
+            RevenueTable.selectAll().where { RevenueTable.userId eq  userId }.map {
                 RevenueDto(
                     it[RevenueTable.id],
                     it[RevenueTable.name],
@@ -82,9 +83,9 @@ class RevenueService(private val database: Database) {
         }
     }
 
-    suspend fun delete(id: Int) {
+    suspend fun delete(id: Int, userId: String) {
         dbQuery {
-            RevenueTable.deleteWhere { RevenueTable.id.eq(id) }
+            RevenueTable.deleteWhere { (RevenueTable.id eq id) and (RevenueTable.userId eq userId) }
         }
     }
 
