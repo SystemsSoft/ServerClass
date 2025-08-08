@@ -27,6 +27,12 @@ data class User(
     var password: String
 )
 
+@Serializable
+data class LoginResponse(
+    val isAuthenticated: Boolean,
+    val idLicense: String? = null
+)
+
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class ClientService(private val db: Database) {
     object ClientTable : Table() {

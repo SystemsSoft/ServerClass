@@ -11,6 +11,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import schemas.users.Client
 import schemas.users.ClientService
+import schemas.users.LoginResponse
 import schemas.users.User
 
 
@@ -29,14 +30,19 @@ fun Application.clientRouting(clientService: ClientService) {
             try {
                 val user = call.receive<User>()
                 var isAuthenticated = false
+                var idLicense: String? = null
                 val userList = clientService.readAll()
-                val isUser = userList.filter { it.password == user.password }
+                val isUser = userList.filter { it.password == user.password && it.name == user.name }
 
                 if (isUser.isNotEmpty()) {
-                    isAuthenticated = isUser.any{ it.license }
+                    val userFound = isUser.first()
+                    if (userFound.license) {
+                        isAuthenticated = true
+                        idLicense = userFound.idLicense
+                    }
                 }
 
-                call.respond(HttpStatusCode.OK, isAuthenticated)
+                call.respond(HttpStatusCode.OK, LoginResponse(isAuthenticated, idLicense))
 
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
