@@ -10,6 +10,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
+import schemas.mec.DeleteDto
 import schemas.mec.Revenue
 import schemas.mec.RevenueDto
 import schemas.mec.RevenueService
@@ -46,11 +47,11 @@ fun Application.revenueRouting(revenueService: RevenueService) {
             }
         }
 
-        delete("/revenues/{id}") {
+        delete("/revenues") {
             try {
-                val revenue = call.receive<RevenueDto>()
+                val deleteDto = call.receive<DeleteDto>()
 
-                revenueService.delete(revenue.id,revenue.userId)
+                revenueService.delete(deleteDto.id, deleteDto.userId)
                 call.respond(HttpStatusCode.OK, "Revenue deleted successfully!")
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Error deleting revenue: ${e.message}")

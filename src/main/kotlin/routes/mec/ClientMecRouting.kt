@@ -40,7 +40,7 @@ fun Application.clientMecRouting(clientMecService: ClientMecService) {
         delete("/clients/mec") {
             try {
                 val client = call.receive<ClientMecDto>()
-                clientMecService.delete(client.id, client.userId) // Passa o idLicense para a função
+                clientMecService.delete(client.id, client.userId)
                 call.respond(HttpStatusCode.OK, "Cliente MEC excluído com sucesso!")
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao excluir cliente MEC: ${e.message}")

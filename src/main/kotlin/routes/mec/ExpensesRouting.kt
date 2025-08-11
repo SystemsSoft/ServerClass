@@ -1,5 +1,6 @@
 package routes.`class` // Consider changing to 'routes.financial' or 'routes.expenses' for better organization
 
+import DeleteExpenseDto
 import Expense
 import ExpenseDto
 import ExpenseService
@@ -12,6 +13,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
+import schemas.mec.DeleteDto
 
 
 fun Application.expensesRouting(expenseService: ExpenseService) { // Renamed parameter for clarity
@@ -49,16 +51,15 @@ fun Application.expensesRouting(expenseService: ExpenseService) { // Renamed par
             }
         }
 
-        delete("/expenses/{id}") {
+        delete("/expenses") {
             try {
-                val expense = call.receive<ExpenseDto>()
-                expenseService.delete(expense.id,expense.userId)
+                val deleteDto = call.receive<DeleteExpenseDto>()
+                expenseService.delete(deleteDto.id, deleteDto.userId)
+
                 call.respond(HttpStatusCode.OK, "Expense deleted successfully!")
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao excluir despesa: ${e.message}")
             }
-
-
         }
     }
 }

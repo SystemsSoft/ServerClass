@@ -23,6 +23,11 @@ data class ExpenseDto(
     val userId: String
 )
 
+@Serializable
+data class DeleteExpenseDto(
+    val id: Int,
+    val userId: String
+)
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class ExpenseService(private val database: Database) {
@@ -56,7 +61,7 @@ class ExpenseService(private val database: Database) {
 
     suspend fun readAll(userId: String): List<ExpenseDto> {
         return dbQuery {
-            ExpenseTable.selectAll().where { ClientMecTable.userId eq  userId }.map {
+            ExpenseTable.selectAll().where { ExpenseTable.userId eq  userId }.map {
                 ExpenseDto(
                     it[ExpenseTable.id],
                     it[ExpenseTable.name],
@@ -81,7 +86,7 @@ class ExpenseService(private val database: Database) {
 
     suspend fun delete(id: Int,userId: String) {
         dbQuery {
-            ExpenseTable.deleteWhere { (ClientMecTable.id eq id) and (ClientMecTable.userId eq userId) }
+            ExpenseTable.deleteWhere { (ExpenseTable.id eq id) and (ExpenseTable.userId eq userId) }
         }
     }
 

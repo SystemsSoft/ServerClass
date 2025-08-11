@@ -1,6 +1,5 @@
 package schemas.mec
 
-import ClientMecService.ClientMecTable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.Database
@@ -19,7 +18,7 @@ import org.jetbrains.exposed.sql.deleteWhere
 data class PriceTableMec(
     val name: String,
     val price: String,
-    val userId: String // Novo campo
+    val userId: String
 )
 
 @Serializable
@@ -79,9 +78,9 @@ class PriceTableMecService(private val db: Database) {
         }
     }
 
-    suspend fun delete(id: Int) {
+    suspend fun delete(id: Int, userId: String) {
         dbQuery {
-            PriceTableMec.deleteWhere { PriceTableMec.id.eq(id) }
+            PriceTableMec.deleteWhere { (PriceTableMec.id eq id) and (PriceTableMec.userId eq userId) }
         }
     }
 

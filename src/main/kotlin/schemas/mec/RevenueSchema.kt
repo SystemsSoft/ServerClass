@@ -1,6 +1,5 @@
 package schemas.mec
 
-import ClientMecService.ClientMecTable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
@@ -26,6 +25,11 @@ data class RevenueDto(
     val userId: String
 )
 
+@Serializable
+data class DeleteDto(
+    val id: Int,
+    val userId: String
+)
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class RevenueService(private val database: Database) {

@@ -48,8 +48,8 @@ fun Application.pricingTableRouting(priceTableMecService: PriceTableMecService) 
 
         delete("/pricing/mec") {
             try {
-                val pricingEntry = call.receive<PriceTableMecDto>() // Assuming you send the DTO with the ID to delete
-                priceTableMecService.delete(pricingEntry.id)
+                val pricingEntry = call.receive<PriceTableMecDto>()
+                priceTableMecService.delete(pricingEntry.id,pricingEntry.userId)
                 call.respond(HttpStatusCode.OK, "Tabela de preços MEC excluída com sucesso!")
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao excluir tabela de preços MEC: ${e.message}")
