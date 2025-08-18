@@ -16,7 +16,11 @@ import org.jetbrains.exposed.sql.and
 data class ClientMec(
     val name: String,
     val phone: String,
-    val userId: String
+    val userId: String,
+    val veiculo: String,
+    val ano: String,
+    val marca: String,
+    val placa: String
 )
 
 @Serializable
@@ -24,7 +28,11 @@ data class ClientMecDto(
     var id: Int,
     var name: String,
     var phone: String,
-    val userId: String
+    val userId: String,
+    var veiculo: String,
+    var ano: String,
+    var marca: String,
+    var placa: String
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -34,6 +42,11 @@ class ClientMecService(private val db: Database) {
         val name = varchar("name", length = 50)
         val phone = varchar("phone", length = 50)
         val userId = varchar("userId",length = 50)
+        val veiculo = varchar("veiculo", length = 50).nullable()
+        val ano = varchar("ano", length = 10).nullable()
+        val marca = varchar("marca", length = 50).nullable()
+        val placa = varchar("placa", length = 10).nullable()
+
         override val primaryKey = PrimaryKey(id)
     }
 
@@ -49,6 +62,10 @@ class ClientMecService(private val db: Database) {
                 it[name] = client.name
                 it[phone] = client.phone
                 it[userId] = client.userId
+                it[veiculo] = client.veiculo
+                it[ano] = client.ano
+                it[marca] = client.marca
+                it[placa] = client.placa
             }[ClientMecTable.id]
         }
     }
@@ -60,7 +77,11 @@ class ClientMecService(private val db: Database) {
                     it[ClientMecTable.id],
                     it[ClientMecTable.name],
                     it[ClientMecTable.phone],
-                    it[ClientMecTable.userId]
+                    it[ClientMecTable.userId],
+                    it[ClientMecTable.veiculo] ?: "",
+                    it[ClientMecTable.ano] ?: "",
+                    it[ClientMecTable.marca] ?: "",
+                    it[ClientMecTable.placa] ?: ""
                 )
             }
         }
@@ -71,6 +92,10 @@ class ClientMecService(private val db: Database) {
             ClientMecTable.update({ (ClientMecTable.id eq id) and (ClientMecTable.userId eq client.userId) }) {
                 it[name] = client.name
                 it[phone] = client.phone
+                it[veiculo] = client.veiculo
+                it[ano] = client.ano
+                it[marca] = client.marca
+                it[placa] = client.placa
             }
         }
     }
