@@ -24,11 +24,13 @@ import routes.`class`.expensesRouting
 import routes.`class`.pricingTableRouting
 import routes.`class`.revenueRouting
 import routes.`class`.uploadRouting
+import routes.mec.serviceOrderRouting
 import schemas.classes.ClassesListService
 import schemas.users.ClientService
 
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
+import schemas.mec.ServiceOrderService
 import kotlin.getValue
 
 fun main(args: Array<String>) {
@@ -78,12 +80,14 @@ private fun Application.configureRoutingMec() {
     val expenses by inject<ExpenseService>()
     val revenue by inject<RevenueService>()
     val pricingTable by inject<PriceTableMecService>()
+    val serviceOrder: ServiceOrderService by inject<ServiceOrderService>()
 
 
     clientMecRouting(clientMec)
     expensesRouting(expenses)
     revenueRouting(revenue)
     pricingTableRouting(pricingTable)
+    serviceOrderRouting(serviceOrder)
 }
 
 

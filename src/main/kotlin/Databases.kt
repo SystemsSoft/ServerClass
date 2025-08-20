@@ -6,6 +6,7 @@ import org.koin.dsl.module
 import schemas.users.ClientService
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
+import schemas.mec.ServiceOrderService
 
 object DatabaseConfig {
     val classModule = module {
@@ -50,5 +51,6 @@ object DatabaseConfig {
         single { ExpenseService(get(named("MecDB"))) }
         single { PriceTableMecService(get(named("MecDB"))) }
         single { RevenueService(get(named("MecDB"))) }
+        single { ServiceOrderService(get(named("MecDB"))) }
     }
 }
