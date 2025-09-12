@@ -29,6 +29,7 @@ data class ServiceOrder(
     val laborValue: Double,
     val totalValue: Double,
     val deliveryDate: String,
+    val km: String,
     val status: String
 )
 
@@ -45,6 +46,7 @@ data class ServiceOrderDto(
     val laborValue: Double,
     val totalValue: Double,
     val deliveryDate: String,
+    val km: String,
     val status: String
 )
 
@@ -64,6 +66,7 @@ class ServiceOrderService(private val db: Database) {
         val laborValue = double("laborValue")
         val totalValue = double("totalValue")
         val deliveryDate = varchar("deliveryDate", length = 50)
+        val km = varchar("km", length = 50)
         val status = varchar("status", length = 50)
 
         override val primaryKey = PrimaryKey(id)
@@ -88,6 +91,7 @@ class ServiceOrderService(private val db: Database) {
                 it[laborValue] = serviceOrder.laborValue
                 it[totalValue] = serviceOrder.totalValue
                 it[deliveryDate] = serviceOrder.deliveryDate
+                it[km] = serviceOrder.km
                 it[status] = serviceOrder.status
             }[ServiceOrderTable.id]
         }
@@ -112,6 +116,7 @@ class ServiceOrderService(private val db: Database) {
                 it[laborValue] = serviceOrder.laborValue
                 it[totalValue] = serviceOrder.totalValue
                 it[deliveryDate] = serviceOrder.deliveryDate
+                it[km] = serviceOrder.km
                 it[status] = serviceOrder.status
             }
         }
@@ -135,6 +140,7 @@ class ServiceOrderService(private val db: Database) {
         laborValue = row[ServiceOrderTable.laborValue],
         totalValue = row[ServiceOrderTable.totalValue],
         deliveryDate = row[ServiceOrderTable.deliveryDate],
+        km = row[ServiceOrderTable.km],
         status = row[ServiceOrderTable.status]
     )
 
