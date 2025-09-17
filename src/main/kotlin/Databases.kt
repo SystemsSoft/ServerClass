@@ -7,6 +7,7 @@ import schemas.users.ClientService
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
 import schemas.mec.ServiceOrderService
+import schemas.mec.VehicleService
 
 object DatabaseConfig {
     val classModule = module {
@@ -52,5 +53,6 @@ object DatabaseConfig {
         single { PriceTableMecService(get(named("MecDB"))) }
         single { RevenueService(get(named("MecDB"))) }
         single { ServiceOrderService(get(named("MecDB"))) }
+        single { VehicleService(get(named("MecDB"))) }
     }
 }
