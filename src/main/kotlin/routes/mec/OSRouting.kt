@@ -31,6 +31,22 @@ fun Application.serviceOrderRouting(serviceOrderService: ServiceOrderService) {
             }
         }
 
+        get("/service_orders/details") {
+            try {
+                val clientId = call.request.queryParameters["clientId"]?.toIntOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, "clientId inválido ou não fornecido.")
+                val userId = call.request.queryParameters["userId"]
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, "userId não fornecido.")
+                val idVeiculo = call.request.queryParameters["idVeiculo"]?.toIntOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, "idVeiculo inválido ou não fornecido.")
+
+                val serviceOrders = serviceOrderService.readByClientAndVehicle(clientId, userId, idVeiculo)
+                call.respond(HttpStatusCode.OK, serviceOrders)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar ordens de serviço detalhadas: ${e.message}")
+            }
+        }
+
         put("/service_orders") {
             try {
                 val serviceOrder = call.receive<ServiceOrderDto>()

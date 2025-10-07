@@ -133,6 +133,18 @@ class ServiceOrderService(private val db: Database) {
         }
     }
 
+    suspend fun readByClientAndVehicle(clientId: Int, userId: String, idVeiculo: Int): List<ServiceOrderDto> {
+        return dbQuery {
+            ServiceOrderTable.selectAll()
+                .where {
+                    (ServiceOrderTable.clientId eq clientId) and
+                            (ServiceOrderTable.userId eq userId) and
+                            (ServiceOrderTable.idVeiculo eq idVeiculo)
+                }
+                .map { toServiceOrderDto(it) }
+        }
+    }
+
     private fun toServiceOrderDto(row: ResultRow) = ServiceOrderDto(
         id = row[ServiceOrderTable.id],
         clientId = row[ServiceOrderTable.clientId],
