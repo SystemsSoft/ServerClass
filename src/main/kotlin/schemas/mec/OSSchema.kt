@@ -22,6 +22,7 @@ data class ServiceOrder(
     val clientId: Int,
     val userId: String,
     val clientName: String,
+    val idVeiculo: Int, // <-- Adicionado
     val veiculo: String,
     val description: String,
     val partsUsed: String,
@@ -39,6 +40,7 @@ data class ServiceOrderDto(
     val clientId: Int,
     val userId: String,
     val clientName: String,
+    val idVeiculo: Int,
     val veiculo: String,
     val description: String,
     val partsUsed: String,
@@ -59,6 +61,7 @@ class ServiceOrderService(private val db: Database) {
         val userId = varchar("userId", length = 50)
 
         val clientName = varchar("clientName", length = 150)
+        val idVeiculo = integer("idVeiculo")
         val veiculo = varchar("veiculo", length = 150)
         val description = text("description")
         val partsUsed = text("partsUsed")
@@ -84,6 +87,7 @@ class ServiceOrderService(private val db: Database) {
                 it[clientId] = serviceOrder.clientId
                 it[clientName] = serviceOrder.clientName
                 it[userId] = serviceOrder.userId
+                it[idVeiculo] = serviceOrder.idVeiculo
                 it[veiculo] = serviceOrder.veiculo
                 it[description] = serviceOrder.description
                 it[partsUsed] = serviceOrder.partsUsed
@@ -110,6 +114,7 @@ class ServiceOrderService(private val db: Database) {
             ServiceOrderTable.update({ (ServiceOrderTable.id eq id) and (ServiceOrderTable.userId eq serviceOrder.userId) }) {
                 it[description] = serviceOrder.description
                 it[clientName] = serviceOrder.clientName
+                it[idVeiculo] = serviceOrder.idVeiculo
                 it[veiculo] = serviceOrder.veiculo
                 it[partsUsed] = serviceOrder.partsUsed
                 it[partsValue] = serviceOrder.partsValue
@@ -132,6 +137,7 @@ class ServiceOrderService(private val db: Database) {
         id = row[ServiceOrderTable.id],
         clientId = row[ServiceOrderTable.clientId],
         clientName = row[ServiceOrderTable.clientName],
+        idVeiculo = row[ServiceOrderTable.idVeiculo],
         veiculo = row[ServiceOrderTable.veiculo],
         userId = row[ServiceOrderTable.userId],
         description = row[ServiceOrderTable.description],
