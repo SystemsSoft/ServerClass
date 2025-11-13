@@ -3,6 +3,7 @@ package routes.users
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
+import io.ktor.server.http.content.staticResources
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -50,14 +51,8 @@ fun Application.clientRouting(clientService: ClientService) {
         }
 
 
-        get("/") {
-            val resourceStream = this::class.java.classLoader.getResourceAsStream("client_form.html")
-            if (resourceStream != null) {
-                val htmlContent = resourceStream.bufferedReader().use { it.readText() }
-                call.respondText(htmlContent, ContentType.Text.Html)
-            } else {
-                call.respond(HttpStatusCode.NotFound, "Página HTML não encontrada.")
-            }
+        staticResources("/", "") {
+            default("index.html")
         }
     }
 }
