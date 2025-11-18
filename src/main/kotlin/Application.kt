@@ -4,12 +4,12 @@ package com.class_erp
 import ClientMecService
 import DatabaseConfig.clientModule
 import DatabaseConfig.classModule
+import DatabaseConfig.estrelasLeiria
 import DatabaseConfig.mecModule
 import ExpenseService
 import UploadService
 import clientMecRouting
 import com.class_erp.schemas.AccessService
-import configureSockets
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
@@ -24,11 +24,12 @@ import routes.`class`.expensesRouting
 import routes.`class`.pricingTableRouting
 import routes.`class`.revenueRouting
 import routes.`class`.uploadRouting
+import routes.estrelasLeiria.categoriaRouting
 import routes.mec.serviceOrderRouting
 import routes.mec.vehicleRouting
 import schemas.classes.ClassesListService
+import schemas.estrelasLeiria.CategoriaService
 import schemas.users.ClientService
-
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
 import schemas.mec.ServiceOrderService
@@ -45,7 +46,7 @@ fun Application.module() {
     configureDependencyInjection()
     configureRouting()
     configureRoutingMec()
-    configureSockets()
+    configureRoutingEstrelasLeiria()
 }
 
 fun Application.configureContentNegotiation() {
@@ -61,7 +62,7 @@ fun Application.configureContentNegotiation() {
 private fun Application.configureDependencyInjection() {
     install(Koin) {
         slf4jLogger()
-        modules(classModule, clientModule, mecModule)
+        modules(classModule, clientModule, mecModule,estrelasLeiria)
     }
 }
 
@@ -92,6 +93,12 @@ private fun Application.configureRoutingMec() {
     revenueRouting(revenue)
     pricingTableRouting(pricingTable)
     serviceOrderRouting(serviceOrder)
+}
+
+private fun Application.configureRoutingEstrelasLeiria() {
+    val categorias by inject<CategoriaService>()
+
+    categoriaRouting(categorias)
 }
 
 

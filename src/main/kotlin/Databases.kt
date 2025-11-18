@@ -3,6 +3,7 @@ import schemas.classes.ClassesListService
 import org.jetbrains.exposed.sql.Database
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import schemas.estrelasLeiria.CategoriaService
 import schemas.users.ClientService
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
@@ -54,5 +55,18 @@ object DatabaseConfig {
         single { RevenueService(get(named("MecDB"))) }
         single { ServiceOrderService(get(named("MecDB"))) }
         single { VehicleService(get(named("MecDB"))) }
+    }
+
+    val estrelasLeiria = module {
+        single(named("EstrelasLeiriaDB")) {
+            Database.connect(
+                url = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/estrelas",
+                user = "dbmasteruser",
+                driver = "com.mysql.cj.jdbc.Driver",
+                password = "q1w2e3r4"
+            )
+        }
+
+        single { CategoriaService(get(named("EstrelasLeiriaDB"))) }
     }
 }
