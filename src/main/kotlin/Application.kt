@@ -25,10 +25,12 @@ import routes.`class`.pricingTableRouting
 import routes.`class`.revenueRouting
 import routes.`class`.uploadRouting
 import routes.estrelasLeiria.categoriaRouting
+import routes.estrelasLeiria.indicadoRouting
 import routes.mec.serviceOrderRouting
 import routes.mec.vehicleRouting
 import schemas.classes.ClassesListService
 import schemas.estrelasLeiria.CategoriaService
+import schemas.estrelasLeiria.IndicadoService
 import schemas.users.ClientService
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
@@ -97,8 +99,10 @@ private fun Application.configureRoutingMec() {
 
 private fun Application.configureRoutingEstrelasLeiria() {
     val categorias by inject<CategoriaService>()
+    val indicados by inject<IndicadoService>()
 
     categoriaRouting(categorias)
+    indicadoRouting(indicados)
 }
 
 
