@@ -41233,7 +41233,7 @@ if(q.d!==0)r.push(B.C4)
 r.push(A.aFP(s,B.j6,new A.cF(q.d,t.f3),A.aPs(),new A.akL()))
 return A.hk(p,A.dP(r,B.di,B.W,B.ao),B.v,B.iR,p,p,p,p,p,new A.ah(o,30,o,30),p,p,p)},
 a3D(a){var s,r,q,p,o=this.d
-if(o>5)o=0
+if(o>=5)o=0
 s=A.ag(B.d.aw(178.5),B.P.v()>>>16&255,B.P.v()>>>8&255,B.P.v()&255)
 r=a?8:14
 q=a?8:12
