@@ -13,6 +13,7 @@ import schemas.classes.ClassesListService
 import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
+import schemas.imobiliaria.ProprietarioService
 import schemas.users.ClientService
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
@@ -40,6 +41,7 @@ object DatabaseConfig {
             transactionIsolation = "TRANSACTION_REPEATABLE_READ"
             validate()
         }
+
         val dataSource = HikariDataSource(config)
         return Database.connect(dataSource)
     }
@@ -62,6 +64,14 @@ object DatabaseConfig {
         }
 
         single { ClientService(get(named("ClientDB"))) }
+    }
+
+    val imobiliaria = module {
+        single(named("ImobiliariaDB")) {
+            conectarBanco("Imob", maxConexoes = 1)
+        }
+
+        single { ProprietarioService(get(named("ImobiliariaDB"))) }
     }
 
     val mecModule = module {

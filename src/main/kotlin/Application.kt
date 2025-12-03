@@ -8,6 +8,7 @@ import clientMecRouting
 import com.class_erp.DatabaseConfig.classModule
 import com.class_erp.DatabaseConfig.clientModule
 import com.class_erp.DatabaseConfig.estrelasLeiria
+import com.class_erp.DatabaseConfig.imobiliaria
 import com.class_erp.DatabaseConfig.mecModule
 import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
@@ -27,12 +28,14 @@ import routes.`class`.uploadRouting
 import routes.estrelasLeiria.categoriaRouting
 import routes.estrelasLeiria.indicadoRouting
 import routes.estrelasLeiria.votoRouting
+import routes.imobiliaria.proprietarioRouting
 import routes.mec.serviceOrderRouting
 import routes.mec.vehicleRouting
 import schemas.classes.ClassesListService
 import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
+import schemas.imobiliaria.ProprietarioService
 import schemas.users.ClientService
 import schemas.mec.PriceTableMecService
 import schemas.mec.RevenueService
@@ -51,6 +54,7 @@ fun Application.module() {
     configureRouting()
     configureRoutingMec()
     configureRoutingEstrelasLeiria()
+    configureRoutingImobiliaria()
 }
 
 fun Application.configureContentNegotiation() {
@@ -71,6 +75,7 @@ private fun Application.configureDependencyInjection() {
             clientModule,
             mecModule,
             estrelasLeiria,
+            imobiliaria
         )
     }
 }
@@ -112,6 +117,13 @@ private fun Application.configureRoutingEstrelasLeiria() {
     categoriaRouting(categorias)
     indicadoRouting(indicados)
     votoRouting(votos)
+}
+private fun Application.configureRoutingImobiliaria() {
+    val propietario by inject<ProprietarioService>()
+
+
+    proprietarioRouting(propietario)
+
 }
 
 
