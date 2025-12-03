@@ -1,8 +1,15 @@
+package com.class_erp
+
+import ClientMecService
+import ExpenseService
+import UploadService
 import com.class_erp.schemas.AccessService
-import schemas.classes.ClassesListService
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
 import org.jetbrains.exposed.sql.Database
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import schemas.classes.ClassesListService
 import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
@@ -13,15 +20,35 @@ import schemas.mec.ServiceOrderService
 import schemas.mec.VehicleService
 
 object DatabaseConfig {
+
+    private fun conectarBanco(dbName: String, maxConexoes: Int): Database {
+        val config = HikariConfig().apply {
+            jdbcUrl = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/$dbName"
+            username = "dbmasteruser"
+            password = "q1w2e3r4"
+            driverClassName = "com.mysql.cj.jdbc.Driver"
+
+            // CONFIGURAÇÕES DE LIMITE
+            maximumPoolSize = maxConexoes
+            minimumIdle = 0 // Permite fechar todas se não estiver usando (economia)
+            idleTimeout = 300000 // 5 minutos sem uso = fecha conexão
+            connectionTimeout = 10000 // 10 segundos para desistir se estiver cheio
+            maxLifetime = 1800000 // 30 minutos vida máxima da conexão
+
+            // Otimizações
+            isAutoCommit = false
+            transactionIsolation = "TRANSACTION_REPEATABLE_READ"
+            validate()
+        }
+        val dataSource = HikariDataSource(config)
+        return Database.connect(dataSource)
+    }
+
+
     val classModule = module {
         single(named("MainDB")) {
-
-            Database.connect(
-                url = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/effective_english_course",
-                user = "dbmasteruser",
-                driver = "com.mysql.cj.jdbc.Driver",
-                password = "q1w2e3r4"
-            )
+            // Limite: 2 conexões
+            conectarBanco("effective_english_course", maxConexoes = 2)
         }
 
         single { AccessService(get(named("MainDB"))) }
@@ -31,24 +58,15 @@ object DatabaseConfig {
 
     val clientModule = module {
         single(named("ClientDB")) {
-            Database.connect(
-                url = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/Users",
-                user = "dbmasteruser",
-                driver = "com.mysql.cj.jdbc.Driver",
-                password = "q1w2e3r4"
-            )
+            conectarBanco("Users", maxConexoes = 1)
         }
 
         single { ClientService(get(named("ClientDB"))) }
     }
+
     val mecModule = module {
         single(named("MecDB")) {
-            Database.connect(
-                url = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/mec",
-                user = "dbmasteruser",
-                driver = "com.mysql.cj.jdbc.Driver",
-                password = "q1w2e3r4"
-            )
+            conectarBanco("mec", maxConexoes = 1)
         }
 
         single { ClientMecService(get(named("MecDB"))) }
@@ -59,14 +77,10 @@ object DatabaseConfig {
         single { VehicleService(get(named("MecDB"))) }
     }
 
+
     val estrelasLeiria = module {
         single(named("EstrelasLeiriaDB")) {
-            Database.connect(
-                url = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/estrelas",
-                user = "dbmasteruser",
-                driver = "com.mysql.cj.jdbc.Driver",
-                password = "q1w2e3r4"
-            )
+            conectarBanco("estrelas", maxConexoes = 15)
         }
 
         single { CategoriaService(get(named("EstrelasLeiriaDB"))) }

@@ -2,13 +2,13 @@ package com.class_erp
 
 
 import ClientMecService
-import DatabaseConfig.clientModule
-import DatabaseConfig.classModule
-import DatabaseConfig.estrelasLeiria
-import DatabaseConfig.mecModule
 import ExpenseService
 import UploadService
 import clientMecRouting
+import com.class_erp.DatabaseConfig.classModule
+import com.class_erp.DatabaseConfig.clientModule
+import com.class_erp.DatabaseConfig.estrelasLeiria
+import com.class_erp.DatabaseConfig.mecModule
 import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
@@ -66,7 +66,12 @@ fun Application.configureContentNegotiation() {
 private fun Application.configureDependencyInjection() {
     install(Koin) {
         slf4jLogger()
-        modules(classModule, clientModule, mecModule,estrelasLeiria)
+        modules(
+            classModule,
+            clientModule,
+            mecModule,
+            estrelasLeiria,
+        )
     }
 }
 

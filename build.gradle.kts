@@ -21,6 +21,8 @@ repositories {
 
 dependencies {
     implementation("mysql:mysql-connector-java:8.0.33")
+    implementation("com.zaxxer:HikariCP:5.1.0")
+    implementation("mysql:mysql-connector-java:8.0.33")
     implementation(libs.kotlin.stdlib)
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.ktor.network.tls)
