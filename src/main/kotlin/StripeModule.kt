@@ -108,7 +108,8 @@ fun Application.configureStripeModule() {
                     if (event.dataObjectDeserializer.`object`.isPresent) {
                         session = event.dataObjectDeserializer.`object`.get() as Session
                     } else {
-                        println("Aviso: Falha na deserialização automática. Ignorando evento para evitar crash.")
+                        println("ERRO GRAVE: Versão da Lib incompatível! O objeto veio vazio.")
+                        println("Evento recebido: ${event.toJson()}")
                     }
 
                     if (session != null) {
