@@ -1,6 +1,7 @@
 package com.class_erp
 
 import com.stripe.Stripe
+import com.stripe.model.Event
 import com.stripe.model.checkout.Session
 import com.stripe.net.Webhook
 import io.ktor.http.*
@@ -9,6 +10,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import java.util.Optional // Importante para o Optional do Java
 
 // --- MODELOS ---
 @Serializable
@@ -32,21 +34,20 @@ data class InscricaoEntidade(
     var status: String
 )
 
-// Lista em memória (lembre-se: se o Heroku reiniciar, isso zera)
 val bancoDeDados = mutableListOf<InscricaoEntidade>()
 var ultimoId = 0
 
 fun Application.configureStripeModule() {
 
+    // 1. CARREGAR VARIÁVEIS (Com proteção)
     val stripeKey = System.getenv("STRIPE_API_KEY")
-        ?: throw IllegalStateException("A variável STRIPE_API_KEY não foi configurada!")
-
     val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
-        ?: throw IllegalStateException("A variável STRIPE_WEBHOOK_SECRET não foi configurada!")
 
-    // 2. CONFIGURAR STRIPE
-    Stripe.apiKey = stripeKey
-    val endpointSecret = webhookSecret
+    if (stripeKey != null) {
+        Stripe.apiKey = stripeKey
+    } else {
+        println("ERRO: STRIPE_API_KEY não encontrada.")
+    }
 
     routing {
 
@@ -63,7 +64,7 @@ fun Application.configureStripeModule() {
                 )
                 bancoDeDados.add(novaInscricao)
 
-                println("Nova inscrição criada: ID $ultimoId - Status: AGUARDANDO")
+                println("Inscrição criada: ID $ultimoId - Status: AGUARDANDO")
                 call.respond(HttpStatusCode.Created, mapOf("id" to ultimoId))
 
             } catch (e: Exception) {
@@ -71,53 +72,70 @@ fun Application.configureStripeModule() {
             }
         }
 
-        // ROTA 2: VERIFICAR STATUS
+        // ROTA 2: VERIFICAR STATUS (Polling)
         get("/inscricoes/{id}") {
             val id = call.parameters["id"]?.toIntOrNull()
             val inscricao = bancoDeDados.find { it.id == id }
 
             if (inscricao != null) {
+                // Retorna o status atual ("AGUARDANDO" ou "PAGO")
                 call.respond(InscricaoResposta(inscricao.id, inscricao.status))
             } else {
+                // Retorna 404 para o Flutter saber que os dados sumiram
                 call.respond(HttpStatusCode.NotFound, "Inscrição não encontrada")
             }
         }
 
-        // ROTA 3: WEBHOOK
+        // ROTA 3: WEBHOOK (ATUALIZADA E SEGURA)
         post("/stripe-webhook") {
             val payload = call.receiveText()
             val sigHeader = call.request.header("Stripe-Signature")
 
+            if (webhookSecret == null) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro de configuração do servidor")
+                return@post
+            }
+
             try {
-                val event = Webhook.constructEvent(payload, sigHeader, endpointSecret)
+                val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
 
                 if (event.type == "checkout.session.completed") {
 
-                    // CORREÇÃO AQUI: Uso das crases em `object`
-                    val session = event.dataObjectDeserializer.`object`.get() as Session
+                    var session: Session? = null
 
-                    val idReferencia = session.clientReferenceId
+                    // --- CORREÇÃO DE SEGURANÇA ---
+                    // Verifica se o objeto existe antes de dar .get()
+                    if (event.dataObjectDeserializer.`object`.isPresent) {
+                        session = event.dataObjectDeserializer.`object`.get() as Session
+                    } else {
+                        println("Aviso: Falha na deserialização automática. Ignorando evento para evitar crash.")
+                    }
 
-                    if (idReferencia != null) {
-                        // CORREÇÃO AQUI: Uso de toIntOrNull para segurança
-                        val id = idReferencia.toIntOrNull()
+                    if (session != null) {
+                        val idReferencia = session.clientReferenceId
 
-                        if (id != null) {
-                            val inscricao = bancoDeDados.find { it.id == id }
-                            if (inscricao != null) {
-                                inscricao.status = "PAGO"
-                                println(">>> PAGAMENTO CONFIRMADO PARA ID $id <<<")
-                            } else {
-                                println("ERRO: Inscrição ID $id não encontrada no banco.")
+                        if (idReferencia != null) {
+                            val id = idReferencia.toIntOrNull()
+                            if (id != null) {
+                                val inscricao = bancoDeDados.find { it.id == id }
+                                if (inscricao != null) {
+                                    inscricao.status = "PAGO"
+                                    println(">>> PAGAMENTO CONFIRMADO PARA ID $id <<<")
+                                } else {
+                                    println("ERRO: ID $id não encontrado no banco (Reinício do servidor?)")
+                                }
                             }
+                        } else {
+                            println("Aviso: Pagamento sem ID de referência.")
                         }
                     }
                 }
+
                 call.respond(HttpStatusCode.OK)
 
             } catch (e: Exception) {
                 println("Erro no Webhook: ${e.message}")
-                call.respond(HttpStatusCode.BadRequest, "Erro de assinatura ou parse")
+                call.respond(HttpStatusCode.BadRequest, "Erro: ${e.message}")
             }
         }
     }
