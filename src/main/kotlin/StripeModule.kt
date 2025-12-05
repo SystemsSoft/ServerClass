@@ -86,58 +86,64 @@ fun Application.configureStripeModule() {
             }
         }
 
-        // ROTA 3: WEBHOOK (ATUALIZADA E SEGURA)
+
+
+
         post("/stripe-webhook") {
-            val payload = call.receiveText()
-            val sigHeader = call.request.header("Stripe-Signature")
+                    val payload = call.receiveText()
+                    val sigHeader = call.request.header("Stripe-Signature")
 
-            if (webhookSecret == null) {
-                call.respond(HttpStatusCode.InternalServerError, "Erro de configuração do servidor")
-                return@post
-            }
-
-            try {
-                val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
-
-                if (event.type == "checkout.session.completed") {
-
-                    var session: Session? = null
-
-                    // --- CORREÇÃO DE SEGURANÇA ---
-                    // Verifica se o objeto existe antes de dar .get()
-                    if (event.dataObjectDeserializer.`object`.isPresent) {
-                        session = event.dataObjectDeserializer.`object`.get() as Session
-                    } else {
-                        println("ERRO GRAVE: Versão da Lib incompatível! O objeto veio vazio.")
-                        println("Evento recebido: ${event.toJson()}")
+                    if (webhookSecret == null) {
+                        call.respond(HttpStatusCode.InternalServerError)
+                        return@post
                     }
 
-                    if (session != null) {
-                        val idReferencia = session.clientReferenceId
+                    try {
+                        // 1. Valida a assinatura (Isso continua funcionando bem)
+                        val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
 
-                        if (idReferencia != null) {
-                            val id = idReferencia.toIntOrNull()
-                            if (id != null) {
-                                val inscricao = bancoDeDados.find { it.id == id }
-                                if (inscricao != null) {
-                                    inscricao.status = "PAGO"
-                                    println(">>> PAGAMENTO CONFIRMADO PARA ID $id <<<")
-                                } else {
-                                    println("ERRO: ID $id não encontrado no banco (Reinício do servidor?)")
+                        if (event.type == "checkout.session.completed") {
+                            println("Evento de checkout recebido. Tentando extrair ID...")
+
+                            // 2. PARSE MANUAL DO JSON (Para contornar o erro da lib)
+                            // Como a lib falhou em criar o objeto Session, vamos ler o JSON bruto do payload
+                            // O payload é uma String JSON. Vamos buscar o campo "client_reference_id"
+
+                            // Usamos uma regex simples ou biblioteca JSON (ex: Gson ou Kotlinx)
+                            // Vamos usar Kotlinx.serialization que você já tem no projeto
+
+                            // Estratégia de "Força Bruta" para não depender de libs complexas agora:
+                            // O campo aparece assim no JSON: "client_reference_id": "1"
+
+                            val regex = """"client_reference_id":\s*"(\d+)"""".toRegex()
+                            val match = regex.find(payload)
+
+                            if (match != null) {
+                                val idString = match.groupValues[1]
+                                val id = idString.toIntOrNull()
+
+                                if (id != null) {
+                                    val inscricao = bancoDeDados.find { it.id == id }
+                                    if (inscricao != null) {
+                                        inscricao.status = "PAGO"
+                                        println(">>> SUCESSO ABSOLUTO: ID $id PAGO! <<<")
+                                    } else {
+                                        println("ERRO: ID $id não encontrado na memória.")
+                                    }
                                 }
+                            } else {
+                                println("Aviso: client_reference_id não encontrado no JSON bruto.")
+                                // Debug: Mostra onde deveria estar
+                                // println(payload)
                             }
-                        } else {
-                            println("Aviso: Pagamento sem ID de referência.")
                         }
+
+                        call.respond(HttpStatusCode.OK)
+
+                    } catch (e: Exception) {
+                        println("Erro no Webhook: ${e.message}")
+                        call.respond(HttpStatusCode.BadRequest)
                     }
                 }
-
-                call.respond(HttpStatusCode.OK)
-
-            } catch (e: Exception) {
-                println("Erro no Webhook: ${e.message}")
-                call.respond(HttpStatusCode.BadRequest, "Erro: ${e.message}")
-            }
-        }
     }
 }
