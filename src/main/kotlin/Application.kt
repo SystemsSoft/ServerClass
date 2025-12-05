@@ -55,6 +55,7 @@ fun Application.module() {
     configureRoutingMec()
     configureRoutingEstrelasLeiria()
     configureRoutingImobiliaria()
+    configureStripeModule()
 }
 
 fun Application.configureContentNegotiation() {
@@ -118,12 +119,11 @@ private fun Application.configureRoutingEstrelasLeiria() {
     indicadoRouting(indicados)
     votoRouting(votos)
 }
+
 private fun Application.configureRoutingImobiliaria() {
     val propietario by inject<ProprietarioService>()
 
-
     proprietarioRouting(propietario)
-
 }
 
 
