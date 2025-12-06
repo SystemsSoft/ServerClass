@@ -21,6 +21,7 @@ import java.util.UUID
 @Serializable
 data class InscricaoDTO(
     val nome: String,
+    val instagram: String, // NOVO CAMPO
     val categoriaId: String,
     val descricaoDetalhada: String,
     val imageData: String // Base64
@@ -33,39 +34,39 @@ data class InscricaoResposta(
 )
 
 // --- TABELA TEMPORÁRIA (PRÉ-INSCRIÇÃO) ---
-// Esta tabela segura os dados enquanto o pagamento não é confirmado.
-// Assim, se o Heroku reiniciar, você não perde o cliente que estava pagando.
 object PreInscricoesTable : Table("pre_inscricoes") {
     val id = integer("id").autoIncrement()
     val nome = varchar("nome", 255)
+    val instagram = varchar("instagram", 100) // NOVO CAMPO NO BANCO
     val categoriaId = varchar("categoria_id", 50)
-    val descricao = text("descricao") // Texto longo
-    val imageData = text("image_data") // Base64 é grande, use text
-    val status = varchar("status", 20).default("AGUARDANDO") // AGUARDANDO, PAGO
+    val descricao = text("descricao")
+    val imageData = text("image_data")
+    val status = varchar("status", 20).default("AGUARDANDO")
 
     override val primaryKey = PrimaryKey(id)
 }
 
 fun Application.configureStripeModule() {
 
-    // Injeção de Dependência do Serviço Principal
     val indicadoService by inject<IndicadoService>()
 
-    // Injeção do Banco de Dados (MainDB ou EstrelasDB, onde você quiser salvar a temp)
-    // Se não conseguir injetar o banco aqui, use o transaction normal se já estiver configurado globalmente
-    // Mas o ideal é pegar o database configurado no Koin.
-    // Vamos assumir que o Exposed já está conectado pelo DatabaseConfig.
-
     // Cria a tabela temporária ao iniciar (se não existir)
-    // NOTA: Em produção, idealmente use Flyway/Liquibase, mas aqui funciona para o MVP
     val db = org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase
     if (db != null) {
         transaction(db) {
+            // Nota: Se a tabela já existir no Heroku sem a coluna instagram,
+            // você pode precisar dropar a tabela manualmente ou adicionar a coluna via SQL.
             SchemaUtils.create(PreInscricoesTable)
+
+            // Tenta adicionar a coluna se ela faltar (Migration simples para Exposed)
+            try {
+                SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable)
+            } catch (e: Exception) {
+                println("Aviso: Tentativa de migração de colunas: ${e.message}")
+            }
         }
     }
 
-    // Configuração Stripe
     val stripeKey = System.getenv("STRIPE_API_KEY")
     val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
 
@@ -74,7 +75,7 @@ fun Application.configureStripeModule() {
     routing {
 
         // --------------------------------------------------
-        // 1. SALVAR PRÉ-INSCRIÇÃO (Banco SQL Temporário)
+        // 1. SALVAR PRÉ-INSCRIÇÃO
         // --------------------------------------------------
         post("/inscricoes") {
             try {
@@ -83,6 +84,7 @@ fun Application.configureStripeModule() {
                 val novoId = newSuspendedTransaction(Dispatchers.IO) {
                     PreInscricoesTable.insert {
                         it[nome] = dto.nome
+                        it[instagram] = dto.instagram // SALVA O INSTAGRAM
                         it[categoriaId] = dto.categoriaId
                         it[descricao] = dto.descricaoDetalhada
                         it[imageData] = dto.imageData
@@ -90,7 +92,7 @@ fun Application.configureStripeModule() {
                     }[PreInscricoesTable.id]
                 }
 
-                println("Pré-inscrição salva no banco: ID $novoId")
+                println("Pré-inscrição salva: ID $novoId - Insta: ${dto.instagram}")
                 call.respond(HttpStatusCode.Created, mapOf("id" to novoId))
 
             } catch (e: Exception) {
@@ -100,7 +102,7 @@ fun Application.configureStripeModule() {
         }
 
         // --------------------------------------------------
-        // 2. POLLING (Consultar Status no SQL Temporário)
+        // 2. POLLING
         // --------------------------------------------------
         get("/inscricoes/{id}") {
             val idParam = call.parameters["id"]?.toIntOrNull()
@@ -123,7 +125,7 @@ fun Application.configureStripeModule() {
         }
 
         // --------------------------------------------------
-        // 3. WEBHOOK (A Mágica da Transferência)
+        // 3. WEBHOOK
         // --------------------------------------------------
         post("/stripe-webhook") {
             val payload = call.receiveText()
@@ -134,23 +136,19 @@ fun Application.configureStripeModule() {
             }
 
             try {
-                // Valida assinatura
                 val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
 
                 if (event.type == "checkout.session.completed") {
                     println("Pagamento recebido. Processando...")
 
-                    // REGEX para extrair ID (Robusto contra versões de lib)
                     val regex = """"client_reference_id":\s*"(\d+)"""".toRegex()
                     val match = regex.find(payload)
 
                     if (match != null) {
                         val idTemp = match.groupValues[1].toInt()
 
-                        // TRANSAÇÃO DE CONFIRMAÇÃO
                         newSuspendedTransaction(Dispatchers.IO) {
 
-                            // A. Busca na Tabela Temporária
                             val row = PreInscricoesTable.selectAll()
                                 .where { PreInscricoesTable.id eq idTemp }
                                 .singleOrNull()
@@ -159,27 +157,24 @@ fun Application.configureStripeModule() {
                                 val statusAtual = row[PreInscricoesTable.status]
 
                                 if (statusAtual != "PAGO") {
-                                    // B. Marca como PAGO na temporária (para o App saber)
                                     PreInscricoesTable.update({ PreInscricoesTable.id eq idTemp }) {
                                         it[status] = "PAGO"
                                     }
 
-                                    // C. >>> MOMENTO CRUCIAL <<<
-                                    // Transfere os dados para a tabela OFICIAL de Indicados
+                                    // Transfere para a tabela OFICIAL
+                                    // ATENÇÃO: A classe Indicado (no outro arquivo) precisa ter o campo instagram também!
                                     val novoIndicado = Indicado(
                                         categoriaId = row[PreInscricoesTable.categoriaId],
                                         nome = row[PreInscricoesTable.nome],
-                                        imageData = row[PreInscricoesTable.imageData], // Passa o Base64
+                                        instagram = row[PreInscricoesTable.instagram], // TRANSFERE O INSTAGRAM
+                                        imageData = row[PreInscricoesTable.imageData],
                                         descricaoDetalhada = row[PreInscricoesTable.descricao]
                                     )
 
-                                    // Gera um UUID para o indicado oficial
                                     val uuidIndicado = UUID.randomUUID().toString()
-
-                                    // Chama o Service que você criou para salvar na tabela final
                                     indicadoService.create(novoIndicado, uuidIndicado)
 
-                                    println(">>> SUCESSO! Inscrição $idTemp promovida a Indicado Oficial ($uuidIndicado) <<<")
+                                    println(">>> SUCESSO! Inscrição $idTemp (Insta: ${novoIndicado.instagram}) promovida a Indicado Oficial <<<")
                                 } else {
                                     println("Aviso: Inscrição $idTemp já estava paga. Ignorando duplicidade.")
                                 }
