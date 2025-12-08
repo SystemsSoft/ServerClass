@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.koin.core.qualifier.named
 import org.koin.ktor.ext.inject
 import schemas.estrelasLeiria.Indicado
 import schemas.estrelasLeiria.IndicadoService
@@ -72,10 +73,9 @@ fun gerarQrCodeBytes(conteudo: String): ByteArray {
 fun Application.configureStripeModule() {
     val emailService = EmailService()
     val indicadoService by inject<IndicadoService>()
+    val databaseEstrelas by inject<Database>(named("EstrelasLeiriaDB"))
 
-    val db = org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase
-    if (db != null) {
-        transaction(db) {
+        transaction(databaseEstrelas) {
             // Vai criar a tabela "pre_inscricoes_v2" do zero com as colunas certas
             SchemaUtils.create(PreInscricoesTable)
             try {
@@ -84,7 +84,7 @@ fun Application.configureStripeModule() {
                 println("Aviso migração: ${e.message}")
             }
         }
-    }
+
 
     val stripeKey = System.getenv("STRIPE_API_KEY")
     val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
