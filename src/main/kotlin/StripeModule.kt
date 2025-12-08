@@ -20,8 +20,9 @@ import schemas.estrelasLeiria.Indicado
 import schemas.estrelasLeiria.IndicadoService
 import java.io.ByteArrayOutputStream
 import java.util.UUID
+import kotlin.concurrent.thread
 
-// --- DTOs (Comunicação com Frontend) ---
+// --- DTOs ---
 @Serializable
 data class InscricaoDTO(
     val nome: String,
@@ -29,7 +30,7 @@ data class InscricaoDTO(
     val categoriaId: String,
     val descricaoDetalhada: String,
     val imageData: String,
-    val desejaParticiparVotacao: Boolean // Recebe do Checkbox do App
+    val desejaParticiparVotacao: Boolean
 )
 
 @Serializable
@@ -38,23 +39,24 @@ data class InscricaoResposta(
     val status: String
 )
 
-// --- TABELA TEMPORÁRIA (PRÉ-INSCRIÇÃO) ---
-object PreInscricoesTable : Table("inscricoes") {
+// --- TABELA TEMPORÁRIA (Nome alterado para forçar recriação correta) ---
+object PreInscricoesTable : Table("pre_inscricoes_v2") {
     val id = integer("id").autoIncrement()
     val nome = varchar("nome", 255)
     val instagram = varchar("instagram", 100)
     val categoriaId = varchar("categoria_id", 50)
     val descricao = text("descricao")
+
+    // Agora vai criar como LONGTEXT corretamente na nova tabela
     val imageData = largeText("image_data")
 
-    // Armazena a escolha da votação temporariamente até o pagamento
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
-
     val status = varchar("status", 20).default("AGUARDANDO")
 
     override val primaryKey = PrimaryKey(id)
 }
 
+// Função auxiliar (Declarada apenas uma vez aqui fora)
 fun gerarQrCodeBytes(conteudo: String): ByteArray {
     return try {
         val writer = QRCodeWriter()
@@ -74,6 +76,7 @@ fun Application.configureStripeModule() {
     val db = org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase
     if (db != null) {
         transaction(db) {
+            // Vai criar a tabela "pre_inscricoes_v2" do zero com as colunas certas
             SchemaUtils.create(PreInscricoesTable)
             try {
                 SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable)
@@ -91,7 +94,7 @@ fun Application.configureStripeModule() {
     routing {
 
         // --------------------------------------------------
-        // 1. ROTA DE QR CODE (Gera imagem PNG com o StripeID)
+        // 1. ROTA DE QR CODE
         // --------------------------------------------------
         get("/ingresso/qrcode/{id}") {
             val idIndicado = call.parameters["id"]
@@ -99,37 +102,6 @@ fun Application.configureStripeModule() {
                 call.respond(HttpStatusCode.BadRequest)
                 return@get
             }
-
-            // Busca o stripeId na tabela oficial de Indicados
-            val stripeId = newSuspendedTransaction(Dispatchers.IO) {
-                IndicadoService.IndicadoTable
-                    .selectAll() // 1. Seleciona tudo primeiro
-                    .where { IndicadoService.IndicadoTable.id eq idIndicado } // 2. Aplica o filtro aqui
-                    .map { it[IndicadoService.IndicadoTable.stripeId] }
-                    .singleOrNull()
-            }
-
-            if (stripeId != null) {
-                try {
-                    val writer = QRCodeWriter()
-                    // Gera o QR Code contendo o ID da Sessão da Stripe (Seguro e Único)
-                    val bitMatrix = writer.encode(stripeId, BarcodeFormat.QR_CODE, 400, 400)
-
-                    val outputStream = ByteArrayOutputStream()
-                    MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream)
-
-                    call.respondBytes(outputStream.toByteArray(), ContentType.Image.PNG)
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.InternalServerError, "Erro geração QR")
-                }
-            } else {
-                call.respond(HttpStatusCode.NotFound, "Ingresso ainda não confirmado ou não encontrado")
-            }
-        }
-
-        get("/ingresso/qrcode/{id}") {
-            val idIndicado = call.parameters["id"]
-            if (idIndicado == null) { call.respond(HttpStatusCode.BadRequest); return@get }
 
             val stripeId = newSuspendedTransaction(Dispatchers.IO) {
                 schemas.estrelasLeiria.IndicadoService.IndicadoTable
@@ -140,17 +112,17 @@ fun Application.configureStripeModule() {
             }
 
             if (stripeId != null) {
-                // Usa a função auxiliar
                 val bytes = gerarQrCodeBytes(stripeId)
                 call.respondBytes(bytes, ContentType.Image.PNG)
             } else {
-                call.respond(HttpStatusCode.NotFound)
+                call.respond(HttpStatusCode.NotFound, "Ingresso não encontrado")
             }
         }
 
+        // --------------------------------------------------
+        // 2. ADMIN: SINCRONIZAR
+        // --------------------------------------------------
         get("/admin/sincronizar") {
-
-
             val listaBilhetes = newSuspendedTransaction(Dispatchers.IO) {
                 IndicadoService.IndicadoTable
                     .selectAll()
@@ -158,18 +130,18 @@ fun Application.configureStripeModule() {
                     .map {
                         mapOf(
                             "stripeId" to it[IndicadoService.IndicadoTable.stripeId],
-                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
-                            "categoria" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
+                            "nome" to it[IndicadoService.IndicadoTable.nome],
+                            "categoria" to it[IndicadoService.IndicadoTable.categoriaId],
                             "status" to "VALIDO"
-                            // Nota: Evite mandar a foto (imageData) aqui se for muito pesada.
-                            // Para 200 pessoas, pode mandar, mas vai gastar uns 10MB de dados.
                         )
                     }
             }
-
             call.respond(listaBilhetes)
         }
 
+        // --------------------------------------------------
+        // 3. ADMIN: VALIDAR UM
+        // --------------------------------------------------
         get("/admin/validar/{stripeId}") {
             val codigoLido = call.parameters["stripeId"]
 
@@ -178,17 +150,15 @@ fun Application.configureStripeModule() {
                 return@get
             }
 
-            // Busca no banco quem é o dono desse código
             val indicadoEncontrado = newSuspendedTransaction(Dispatchers.IO) {
                 IndicadoService.IndicadoTable
                     .selectAll()
                     .where { IndicadoService.IndicadoTable.stripeId eq codigoLido }
                     .map {
-                        // Mapeia para um objeto simples de resposta
                         mapOf(
                             "nome" to it[IndicadoService.IndicadoTable.nome],
                             "categoriaId" to it[IndicadoService.IndicadoTable.categoriaId],
-                            "foto" to it[IndicadoService.IndicadoTable.imageData], // Envia a foto para conferência visual
+                            "foto" to it[IndicadoService.IndicadoTable.imageData],
                             "status" to "VALIDO"
                         )
                     }
@@ -196,15 +166,15 @@ fun Application.configureStripeModule() {
             }
 
             if (indicadoEncontrado != null) {
-                // SUCESSO: O ingresso existe!
                 call.respond(HttpStatusCode.OK, indicadoEncontrado)
             } else {
-                // ERRO: Código não existe no banco (Ingresso Falso)
-                call.respond(HttpStatusCode.NotFound, mapOf("status" to "INVALIDO", "mensagem" to "Ingresso não encontrado no sistema."))
+                call.respond(HttpStatusCode.NotFound, mapOf("status" to "INVALIDO"))
             }
         }
 
-
+        // --------------------------------------------------
+        // 4. SALVAR PRÉ-INSCRIÇÃO (APP)
+        // --------------------------------------------------
         post("/inscricoes") {
             try {
                 val dto = call.receive<InscricaoDTO>()
@@ -216,12 +186,12 @@ fun Application.configureStripeModule() {
                         it[categoriaId] = dto.categoriaId
                         it[descricao] = dto.descricaoDetalhada
                         it[imageData] = dto.imageData
-                        it[desejaParticiparVotacao] = dto.desejaParticiparVotacao // Salva a escolha
+                        it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
                         it[status] = "AGUARDANDO"
                     }[PreInscricoesTable.id]
                 }
 
-                println("Pré-inscrição salva: ID $novoId - Votação: ${dto.desejaParticiparVotacao}")
+                println("Pré-inscrição salva: ID $novoId")
                 call.respond(HttpStatusCode.Created, mapOf("id" to novoId))
 
             } catch (e: Exception) {
@@ -231,7 +201,7 @@ fun Application.configureStripeModule() {
         }
 
         // --------------------------------------------------
-        // 3. POLLING (Verificar status do pagamento)
+        // 5. POLLING STATUS
         // --------------------------------------------------
         get("/inscricoes/{id}") {
             val idParam = call.parameters["id"]?.toIntOrNull()
@@ -249,24 +219,12 @@ fun Application.configureStripeModule() {
             if (statusAtual != null) {
                 call.respond(InscricaoResposta(idParam, statusAtual))
             } else {
-                call.respond(HttpStatusCode.NotFound, "Inscrição não encontrada")
-            }
-        }
-
-        fun gerarQrCodeBytes(conteudo: String): ByteArray {
-            return try {
-                val writer = QRCodeWriter()
-                val bitMatrix = writer.encode(conteudo, BarcodeFormat.QR_CODE, 500, 500)
-                val outputStream = ByteArrayOutputStream()
-                MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream)
-                outputStream.toByteArray()
-            } catch (e: Exception) {
-                ByteArray(0)
+                call.respond(HttpStatusCode.NotFound)
             }
         }
 
         // --------------------------------------------------
-        // 4. WEBHOOK (Stripe -> Servidor)
+        // 6. WEBHOOK STRIPE
         // --------------------------------------------------
         post("/stripe-webhook") {
             val payload = call.receiveText()
@@ -281,7 +239,6 @@ fun Application.configureStripeModule() {
                 val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
 
                 if (event.type == "checkout.session.completed") {
-
                     val regexRef = """"client_reference_id":\s*"(\d+)"""".toRegex()
                     val regexStripeId = """"id":\s*"(cs_[a-zA-Z0-9_]+)"""".toRegex()
                     val regexEmail = """"email":\s*"([^"]+)"""".toRegex()
@@ -324,15 +281,9 @@ fun Application.configureStripeModule() {
 
                                     println(">>> Pagamento Confirmado: ${novoIndicado.nome} <<<")
 
-                                    // --- ENVIO DE E-MAIL COM QR CODE ---
                                     if (customerEmail != null) {
-                                        // 1. Gera os bytes do QR Code usando o ID da Stripe
                                         val qrBytes = gerarQrCodeBytes(stripeSessionId)
-
-                                        // 2. Envia o e-mail em background (para não travar o webhook)
-                                        // Em produção, use Coroutines scope, aqui faremos direto
-                                        kotlin.concurrent.thread {
-                                            println("Tentando enviar e-mail para $customerEmail...")
+                                        thread {
                                             emailService.enviarBilhete(
                                                 destinatario = customerEmail,
                                                 nomeParticipante = novoIndicado.nome,
