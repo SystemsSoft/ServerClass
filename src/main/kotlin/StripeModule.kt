@@ -148,6 +148,62 @@ fun Application.configureStripeModule() {
             }
         }
 
+        get("/admin/sincronizar") {
+
+
+            val listaBilhetes = newSuspendedTransaction(Dispatchers.IO) {
+                IndicadoService.IndicadoTable
+                    .selectAll()
+                    .where { IndicadoService.IndicadoTable.stripeId.isNotNull() }
+                    .map {
+                        mapOf(
+                            "stripeId" to it[IndicadoService.IndicadoTable.stripeId],
+                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            "categoria" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
+                            "status" to "VALIDO"
+                            // Nota: Evite mandar a foto (imageData) aqui se for muito pesada.
+                            // Para 200 pessoas, pode mandar, mas vai gastar uns 10MB de dados.
+                        )
+                    }
+            }
+
+            call.respond(listaBilhetes)
+        }
+
+        get("/admin/validar/{stripeId}") {
+            val codigoLido = call.parameters["stripeId"]
+
+            if (codigoLido == null) {
+                call.respond(HttpStatusCode.BadRequest, "Código vazio")
+                return@get
+            }
+
+            // Busca no banco quem é o dono desse código
+            val indicadoEncontrado = newSuspendedTransaction(Dispatchers.IO) {
+                IndicadoService.IndicadoTable
+                    .selectAll()
+                    .where { IndicadoService.IndicadoTable.stripeId eq codigoLido }
+                    .map {
+                        // Mapeia para um objeto simples de resposta
+                        mapOf(
+                            "nome" to it[IndicadoService.IndicadoTable.nome],
+                            "categoriaId" to it[IndicadoService.IndicadoTable.categoriaId],
+                            "foto" to it[IndicadoService.IndicadoTable.imageData], // Envia a foto para conferência visual
+                            "status" to "VALIDO"
+                        )
+                    }
+                    .singleOrNull()
+            }
+
+            if (indicadoEncontrado != null) {
+                // SUCESSO: O ingresso existe!
+                call.respond(HttpStatusCode.OK, indicadoEncontrado)
+            } else {
+                // ERRO: Código não existe no banco (Ingresso Falso)
+                call.respond(HttpStatusCode.NotFound, mapOf("status" to "INVALIDO", "mensagem" to "Ingresso não encontrado no sistema."))
+            }
+        }
+
 
         post("/inscricoes") {
             try {
