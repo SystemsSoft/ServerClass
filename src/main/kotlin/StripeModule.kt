@@ -55,8 +55,20 @@ object PreInscricoesTable : Table("pre_inscricoes") {
     override val primaryKey = PrimaryKey(id)
 }
 
-fun Application.configureStripeModule() {
+fun gerarQrCodeBytes(conteudo: String): ByteArray {
+    return try {
+        val writer = QRCodeWriter()
+        val bitMatrix = writer.encode(conteudo, BarcodeFormat.QR_CODE, 500, 500)
+        val outputStream = ByteArrayOutputStream()
+        MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream)
+        outputStream.toByteArray()
+    } catch (e: Exception) {
+        ByteArray(0)
+    }
+}
 
+fun Application.configureStripeModule() {
+    val emailService = EmailService()
     val indicadoService by inject<IndicadoService>()
 
     val db = org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase
@@ -115,6 +127,27 @@ fun Application.configureStripeModule() {
             }
         }
 
+        get("/ingresso/qrcode/{id}") {
+            val idIndicado = call.parameters["id"]
+            if (idIndicado == null) { call.respond(HttpStatusCode.BadRequest); return@get }
+
+            val stripeId = newSuspendedTransaction(Dispatchers.IO) {
+                schemas.estrelasLeiria.IndicadoService.IndicadoTable
+                    .selectAll()
+                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.id eq idIndicado }
+                    .map { it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId] }
+                    .singleOrNull()
+            }
+
+            if (stripeId != null) {
+                // Usa a função auxiliar
+                val bytes = gerarQrCodeBytes(stripeId)
+                call.respondBytes(bytes, ContentType.Image.PNG)
+            } else {
+                call.respond(HttpStatusCode.NotFound)
+            }
+        }
+
 
         post("/inscricoes") {
             try {
@@ -164,40 +197,48 @@ fun Application.configureStripeModule() {
             }
         }
 
+        fun gerarQrCodeBytes(conteudo: String): ByteArray {
+            return try {
+                val writer = QRCodeWriter()
+                val bitMatrix = writer.encode(conteudo, BarcodeFormat.QR_CODE, 500, 500)
+                val outputStream = ByteArrayOutputStream()
+                MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream)
+                outputStream.toByteArray()
+            } catch (e: Exception) {
+                ByteArray(0)
+            }
+        }
+
         // --------------------------------------------------
         // 4. WEBHOOK (Stripe -> Servidor)
         // --------------------------------------------------
         post("/stripe-webhook") {
             val payload = call.receiveText()
             val sigHeader = call.request.header("Stripe-Signature")
+            val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
 
             if (webhookSecret == null) {
-                call.respond(HttpStatusCode.InternalServerError, "Webhook Secret não configurado"); return@post
+                call.respond(HttpStatusCode.InternalServerError); return@post
             }
 
             try {
                 val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
 
                 if (event.type == "checkout.session.completed") {
-                    println("Webhook: Pagamento recebido. Processando dados...")
 
-                    // 1. Extrai ID Temporário (Referência do nosso banco)
                     val regexRef = """"client_reference_id":\s*"(\d+)"""".toRegex()
-                    val matchRef = regexRef.find(payload)
-
-                    // 2. Extrai ID da Sessão Stripe (cs_test...) para o QR Code
                     val regexStripeId = """"id":\s*"(cs_[a-zA-Z0-9_]+)"""".toRegex()
-                    val matchStripe = regexStripeId.find(payload)
-
-                    // 3. Extrai Email do Cliente
                     val regexEmail = """"email":\s*"([^"]+)"""".toRegex()
+
+                    val matchRef = regexRef.find(payload)
+                    val matchStripe = regexStripeId.find(payload)
                     val matchEmail = regexEmail.find(payload)
 
                     val stripeSessionId = matchStripe?.groupValues?.get(1)
                     val customerEmail = matchEmail?.groupValues?.get(1)
+                    val idTemp = matchRef?.groupValues?.get(1)?.toIntOrNull()
 
-                    if (matchRef != null && stripeSessionId != null) {
-                        val idTemp = matchRef.groupValues[1].toInt()
+                    if (idTemp != null && stripeSessionId != null) {
 
                         newSuspendedTransaction(Dispatchers.IO) {
                             val row = PreInscricoesTable.selectAll()
@@ -205,23 +246,18 @@ fun Application.configureStripeModule() {
                                 .singleOrNull()
 
                             if (row != null) {
-                                // Só processa se ainda não foi pago para evitar duplicidade
                                 if (row[PreInscricoesTable.status] != "PAGO") {
 
-                                    // A. Atualiza status na tabela temporária
                                     PreInscricoesTable.update({ PreInscricoesTable.id eq idTemp }) {
                                         it[status] = "PAGO"
                                     }
 
-                                    // B. Cria o registro definitivo na tabela de Indicados
                                     val novoIndicado = Indicado(
                                         categoriaId = row[PreInscricoesTable.categoriaId],
                                         nome = row[PreInscricoesTable.nome],
                                         instagram = row[PreInscricoesTable.instagram],
                                         imageData = row[PreInscricoesTable.imageData],
                                         descricaoDetalhada = row[PreInscricoesTable.descricao],
-
-                                        // Dados recuperados
                                         desejaParticiparVotacao = row[PreInscricoesTable.desejaParticiparVotacao],
                                         stripeId = stripeSessionId,
                                         email = customerEmail
@@ -230,24 +266,32 @@ fun Application.configureStripeModule() {
                                     val uuidIndicado = UUID.randomUUID().toString()
                                     indicadoService.create(novoIndicado, uuidIndicado)
 
-                                    println(">>> SUCESSO! Inscrição confirmada.")
-                                    println("Nome: ${novoIndicado.nome}")
-                                    println("Email: $customerEmail")
-                                    println("Votação: ${novoIndicado.desejaParticiparVotacao}")
-                                    println("StripeID: $stripeSessionId")
-                                } else {
-                                    println("Aviso: ID $idTemp já processado anteriormente.")
+                                    println(">>> Pagamento Confirmado: ${novoIndicado.nome} <<<")
+
+                                    // --- ENVIO DE E-MAIL COM QR CODE ---
+                                    if (customerEmail != null) {
+                                        // 1. Gera os bytes do QR Code usando o ID da Stripe
+                                        val qrBytes = gerarQrCodeBytes(stripeSessionId)
+
+                                        // 2. Envia o e-mail em background (para não travar o webhook)
+                                        // Em produção, use Coroutines scope, aqui faremos direto
+                                        kotlin.concurrent.thread {
+                                            println("Tentando enviar e-mail para $customerEmail...")
+                                            emailService.enviarBilhete(
+                                                destinatario = customerEmail,
+                                                nomeParticipante = novoIndicado.nome,
+                                                qrCodeBytes = qrBytes
+                                            )
+                                        }
+                                    }
                                 }
-                            } else {
-                                println("Erro: ID $idTemp não encontrado na tabela temporária.")
                             }
                         }
                     }
                 }
                 call.respond(HttpStatusCode.OK)
             } catch (e: Exception) {
-                println("Erro CRÍTICO no Webhook: ${e.message}")
-                e.printStackTrace()
+                println("Erro Webhook: ${e.message}")
                 call.respond(HttpStatusCode.BadRequest)
             }
         }
