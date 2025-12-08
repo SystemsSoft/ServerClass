@@ -39,7 +39,7 @@ data class InscricaoResposta(
 )
 
 // --- TABELA TEMPORÁRIA (PRÉ-INSCRIÇÃO) ---
-object PreInscricoesTable : Table("pre_inscricoes") {
+object PreInscricoesTable : Table("inscricoes") {
     val id = integer("id").autoIncrement()
     val nome = varchar("nome", 255)
     val instagram = varchar("instagram", 100)
