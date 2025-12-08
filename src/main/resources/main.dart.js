@@ -41839,7 +41839,7 @@ var $async$xF=A.O(function(a,b){if(a===1){p.push(b)
 s=q}while(true)switch(s){case 0:n.a5(new A.aod(n))
 q=3
 s=6
-return A.S(A.av5(A.dZ("http://athennaserver-5c57d33a2f13.herokuapp.com/categorias",0,null)),$async$xF)
+return A.S(A.av5(A.dZ("https://athennaserver-5c57d33a2f13.herokuapp.com/categorias",0,null)),$async$xF)
 case 6:m=b
 if(m.b===200){l=B.bp.qK(B.X.eE(m.w),null)
 i=J.lU(l,new A.aoe(),t.ef)
@@ -41909,8 +41909,8 @@ f=m.as
 f.toString
 l=new A.a6n(d,g,f,m.y.a.a,m.ax,m.ay)
 p=4
-A.avu("Enviando inscri\xe7\xe3o para: http://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes")
-d=A.dZ("http://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes",0,null)
+A.avu("Enviando inscri\xe7\xe3o para: https://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes")
+d=A.dZ("https://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes",0,null)
 g=t.N
 g=A.as(["Content-Type","application/json"],g,g)
 s=7
@@ -42046,7 +42046,7 @@ if(h!=null){A.cp(h,!0).dU()
 i.Q0("Tempo esgotado. O pagamento n\xe3o foi confirmado.\nSe voc\xea pagou, entre em contato com o suporte.")}s=1
 break}p=4
 s=7
-return A.S(A.av5(A.dZ("http://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes/"+n.c,0,null)),$async$$1)
+return A.S(A.av5(A.dZ("https://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes/"+n.c,0,null)),$async$$1)
 case 7:m=c
 if(m.b===200){i=m
 l=B.bp.qK(A.aG_(A.aF0(i.e)).eE(i.w),null)
