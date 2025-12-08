@@ -1,6 +1,8 @@
 package com.class_erp
 
-
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.client.j2se.MatrixToImageWriter
+import com.google.zxing.qrcode.QRCodeWriter
 import com.stripe.Stripe
 import com.stripe.net.Webhook
 import io.ktor.http.*
@@ -27,7 +29,7 @@ data class InscricaoDTO(
     val categoriaId: String,
     val descricaoDetalhada: String,
     val imageData: String,
-    val desejaParticiparVotacao: Boolean // 1. NOVO CAMPO RECEBIDO DO APP
+    val desejaParticiparVotacao: Boolean // Recebe do Checkbox do App
 )
 
 @Serializable
@@ -43,9 +45,9 @@ object PreInscricoesTable : Table("pre_inscricoes") {
     val instagram = varchar("instagram", 100)
     val categoriaId = varchar("categoria_id", 50)
     val descricao = text("descricao")
-    val imageData = largeText("image_data") // Usando largeText para garantir compatibilidade
+    val imageData = largeText("image_data")
 
-    // 2. NOVA COLUNA NA TABELA TEMPORÁRIA
+    // Armazena a escolha da votação temporariamente até o pagamento
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
 
     val status = varchar("status", 20).default("AGUARDANDO")
@@ -61,7 +63,6 @@ fun Application.configureStripeModule() {
     if (db != null) {
         transaction(db) {
             SchemaUtils.create(PreInscricoesTable)
-            // Garante que a coluna nova seja criada no banco se já existir a tabela
             try {
                 SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable)
             } catch (e: Exception) {
@@ -77,18 +78,44 @@ fun Application.configureStripeModule() {
 
     routing {
 
-        // ... (Rota QR Code mantém igual) ...
+        // --------------------------------------------------
+        // 1. ROTA DE QR CODE (Gera imagem PNG com o StripeID)
+        // --------------------------------------------------
         get("/ingresso/qrcode/{id}") {
             val idIndicado = call.parameters["id"]
-            // ... (Lógica do QR Code igual ao anterior)
-            if (idIndicado == null) { call.respond(HttpStatusCode.BadRequest); return@get }
-            // ...
-            call.respond(HttpStatusCode.NotFound) // Placeholder
+            if (idIndicado == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            // Busca o stripeId na tabela oficial de Indicados
+            val stripeId = newSuspendedTransaction(Dispatchers.IO) {
+                IndicadoService.IndicadoTable
+                    .selectAll() // 1. Seleciona tudo primeiro
+                    .where { IndicadoService.IndicadoTable.id eq idIndicado } // 2. Aplica o filtro aqui
+                    .map { it[IndicadoService.IndicadoTable.stripeId] }
+                    .singleOrNull()
+            }
+
+            if (stripeId != null) {
+                try {
+                    val writer = QRCodeWriter()
+                    // Gera o QR Code contendo o ID da Sessão da Stripe (Seguro e Único)
+                    val bitMatrix = writer.encode(stripeId, BarcodeFormat.QR_CODE, 400, 400)
+
+                    val outputStream = ByteArrayOutputStream()
+                    MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream)
+
+                    call.respondBytes(outputStream.toByteArray(), ContentType.Image.PNG)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.InternalServerError, "Erro geração QR")
+                }
+            } else {
+                call.respond(HttpStatusCode.NotFound, "Ingresso ainda não confirmado ou não encontrado")
+            }
         }
 
-        // --------------------------------------------------
-        // 1. SALVAR PRÉ-INSCRIÇÃO
-        // --------------------------------------------------
+
         post("/inscricoes") {
             try {
                 val dto = call.receive<InscricaoDTO>()
@@ -100,8 +127,7 @@ fun Application.configureStripeModule() {
                         it[categoriaId] = dto.categoriaId
                         it[descricao] = dto.descricaoDetalhada
                         it[imageData] = dto.imageData
-                        // 3. SALVA O BOOLEAN NA TABELA TEMPORÁRIA
-                        it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
+                        it[desejaParticiparVotacao] = dto.desejaParticiparVotacao // Salva a escolha
                         it[status] = "AGUARDANDO"
                     }[PreInscricoesTable.id]
                 }
@@ -115,34 +141,60 @@ fun Application.configureStripeModule() {
             }
         }
 
-        // ... (Rota POLLING mantém igual) ...
+        // --------------------------------------------------
+        // 3. POLLING (Verificar status do pagamento)
+        // --------------------------------------------------
         get("/inscricoes/{id}") {
-            // ... mesma lógica anterior ...
             val idParam = call.parameters["id"]?.toIntOrNull()
-            if(idParam != null) call.respond(InscricaoResposta(idParam, "AGUARDANDO")) // Placeholder para compilar no exemplo
+            if (idParam == null) {
+                call.respond(HttpStatusCode.BadRequest); return@get
+            }
+
+            val statusAtual = newSuspendedTransaction(Dispatchers.IO) {
+                PreInscricoesTable.selectAll()
+                    .where { PreInscricoesTable.id eq idParam }
+                    .map { it[PreInscricoesTable.status] }
+                    .singleOrNull()
+            }
+
+            if (statusAtual != null) {
+                call.respond(InscricaoResposta(idParam, statusAtual))
+            } else {
+                call.respond(HttpStatusCode.NotFound, "Inscrição não encontrada")
+            }
         }
 
         // --------------------------------------------------
-        // 3. WEBHOOK
+        // 4. WEBHOOK (Stripe -> Servidor)
         // --------------------------------------------------
         post("/stripe-webhook") {
             val payload = call.receiveText()
             val sigHeader = call.request.header("Stripe-Signature")
 
             if (webhookSecret == null) {
-                call.respond(HttpStatusCode.InternalServerError); return@post
+                call.respond(HttpStatusCode.InternalServerError, "Webhook Secret não configurado"); return@post
             }
 
             try {
                 val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
 
                 if (event.type == "checkout.session.completed") {
+                    println("Webhook: Pagamento recebido. Processando dados...")
+
+                    // 1. Extrai ID Temporário (Referência do nosso banco)
                     val regexRef = """"client_reference_id":\s*"(\d+)"""".toRegex()
                     val matchRef = regexRef.find(payload)
 
+                    // 2. Extrai ID da Sessão Stripe (cs_test...) para o QR Code
                     val regexStripeId = """"id":\s*"(cs_[a-zA-Z0-9_]+)"""".toRegex()
                     val matchStripe = regexStripeId.find(payload)
+
+                    // 3. Extrai Email do Cliente
+                    val regexEmail = """"email":\s*"([^"]+)"""".toRegex()
+                    val matchEmail = regexEmail.find(payload)
+
                     val stripeSessionId = matchStripe?.groupValues?.get(1)
+                    val customerEmail = matchEmail?.groupValues?.get(1)
 
                     if (matchRef != null && stripeSessionId != null) {
                         val idTemp = matchRef.groupValues[1].toInt()
@@ -153,37 +205,49 @@ fun Application.configureStripeModule() {
                                 .singleOrNull()
 
                             if (row != null) {
+                                // Só processa se ainda não foi pago para evitar duplicidade
                                 if (row[PreInscricoesTable.status] != "PAGO") {
 
+                                    // A. Atualiza status na tabela temporária
                                     PreInscricoesTable.update({ PreInscricoesTable.id eq idTemp }) {
                                         it[status] = "PAGO"
                                     }
 
-                                    // 4. TRANSFERE O DADO PARA A TABELA OFICIAL
-                                    // Atenção: Você precisa adicionar este campo na classe Indicado (no outro arquivo)
+                                    // B. Cria o registro definitivo na tabela de Indicados
                                     val novoIndicado = Indicado(
                                         categoriaId = row[PreInscricoesTable.categoriaId],
                                         nome = row[PreInscricoesTable.nome],
                                         instagram = row[PreInscricoesTable.instagram],
                                         imageData = row[PreInscricoesTable.imageData],
                                         descricaoDetalhada = row[PreInscricoesTable.descricao],
+
+                                        // Dados recuperados
+                                        desejaParticiparVotacao = row[PreInscricoesTable.desejaParticiparVotacao],
                                         stripeId = stripeSessionId,
-                                        // Pega o valor do banco temporário
-                                        desejaParticiparVotacao = row[PreInscricoesTable.desejaParticiparVotacao]
+                                        email = customerEmail
                                     )
 
                                     val uuidIndicado = UUID.randomUUID().toString()
                                     indicadoService.create(novoIndicado, uuidIndicado)
 
-                                    println(">>> SUCESSO! ID $idTemp confirmado. Participa Votação: ${novoIndicado.desejaParticiparVotacao}")
+                                    println(">>> SUCESSO! Inscrição confirmada.")
+                                    println("Nome: ${novoIndicado.nome}")
+                                    println("Email: $customerEmail")
+                                    println("Votação: ${novoIndicado.desejaParticiparVotacao}")
+                                    println("StripeID: $stripeSessionId")
+                                } else {
+                                    println("Aviso: ID $idTemp já processado anteriormente.")
                                 }
+                            } else {
+                                println("Erro: ID $idTemp não encontrado na tabela temporária.")
                             }
                         }
                     }
                 }
                 call.respond(HttpStatusCode.OK)
             } catch (e: Exception) {
-                println("Erro Webhook: ${e.message}")
+                println("Erro CRÍTICO no Webhook: ${e.message}")
+                e.printStackTrace()
                 call.respond(HttpStatusCode.BadRequest)
             }
         }
