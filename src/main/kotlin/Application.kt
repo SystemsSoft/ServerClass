@@ -27,6 +27,7 @@ import routes.`class`.revenueRouting
 import routes.`class`.uploadRouting
 import routes.estrelasLeiria.categoriaRouting
 import routes.estrelasLeiria.indicadoRouting
+import routes.estrelasLeiria.stripeRouting
 import routes.estrelasLeiria.votoRouting
 import routes.imobiliaria.proprietarioRouting
 import routes.mec.serviceOrderRouting
@@ -55,7 +56,6 @@ fun Application.module() {
     configureRoutingMec()
     configureRoutingEstrelasLeiria()
     configureRoutingImobiliaria()
-    configureStripeModule()
 }
 
 fun Application.configureContentNegotiation() {
@@ -118,6 +118,7 @@ private fun Application.configureRoutingEstrelasLeiria() {
     categoriaRouting(categorias)
     indicadoRouting(indicados)
     votoRouting(votos)
+    stripeRouting(indicados)
 }
 
 private fun Application.configureRoutingImobiliaria() {

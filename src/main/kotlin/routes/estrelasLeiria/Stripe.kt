@@ -1,5 +1,6 @@
-package com.class_erp
+package routes.estrelasLeiria // Ajuste o pacote conforme sua estrutura de pastas
 
+import com.class_erp.EmailService
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.client.j2se.MatrixToImageWriter
 import com.google.zxing.qrcode.QRCodeWriter
@@ -40,24 +41,21 @@ data class InscricaoResposta(
     val status: String
 )
 
-// --- TABELA TEMPORÁRIA (Nome alterado para forçar recriação correta) ---
+// --- TABELA TEMPORÁRIA ---
 object PreInscricoesTable : Table("pre_inscricoes_v2") {
     val id = integer("id").autoIncrement()
     val nome = varchar("nome", 255)
     val instagram = varchar("instagram", 100)
     val categoriaId = varchar("categoria_id", 50)
     val descricao = text("descricao")
-
-    // Agora vai criar como LONGTEXT corretamente na nova tabela
-    val imageData = largeText("image_data")
-
+    val imageData = largeText("image_data") // LONGTEXT
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
     val status = varchar("status", 20).default("AGUARDANDO")
 
     override val primaryKey = PrimaryKey(id)
 }
 
-// Função auxiliar (Declarada apenas uma vez aqui fora)
+// --- FUNÇÃO AUXILIAR ---
 fun gerarQrCodeBytes(conteudo: String): ByteArray {
     return try {
         val writer = QRCodeWriter()
@@ -70,21 +68,31 @@ fun gerarQrCodeBytes(conteudo: String): ByteArray {
     }
 }
 
-fun Application.configureStripeModule() {
+// --- ROTEAMENTO ---
+fun Application.stripeRouting(indicadoService: IndicadoService) {
+
+    // Injeção de dependências
     val emailService = EmailService()
-    val indicadoService by inject<IndicadoService>()
+
+    // ⚠️ CRUCIAL: Pegar a conexão específica do Estrelas de Leiria
     val databaseEstrelas by inject<Database>(named("EstrelasLeiriaDB"))
 
-        transaction(databaseEstrelas) {
-            // Vai criar a tabela "pre_inscricoes_v2" do zero com as colunas certas
-            SchemaUtils.create(PreInscricoesTable)
-            try {
-                SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable)
-            } catch (e: Exception) {
-                println("Aviso migração: ${e.message}")
-            }
+    // Inicialização das tabelas no banco correto
+    transaction(databaseEstrelas) {
+        SchemaUtils.create(PreInscricoesTable)
+        try {
+            SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable)
+        } catch (e: Exception) {
+            println("Aviso migração: ${e.message}")
         }
-
+        // Garante que a tabela oficial também existe
+        SchemaUtils.create(schemas.estrelasLeiria.IndicadoService.IndicadoTable)
+        try {
+            SchemaUtils.createMissingTablesAndColumns(schemas.estrelasLeiria.IndicadoService.IndicadoTable)
+        } catch (e: Exception) {
+            // Ignora
+        }
+    }
 
     val stripeKey = System.getenv("STRIPE_API_KEY")
     val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
@@ -93,9 +101,7 @@ fun Application.configureStripeModule() {
 
     routing {
 
-        // --------------------------------------------------
         // 1. ROTA DE QR CODE
-        // --------------------------------------------------
         get("/ingresso/qrcode/{id}") {
             val idIndicado = call.parameters["id"]
             if (idIndicado == null) {
@@ -103,7 +109,8 @@ fun Application.configureStripeModule() {
                 return@get
             }
 
-            val stripeId = newSuspendedTransaction(Dispatchers.IO) {
+            // ⚠️ CORREÇÃO: db = databaseEstrelas
+            val stripeId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                 schemas.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
                     .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.id eq idIndicado }
@@ -119,19 +126,18 @@ fun Application.configureStripeModule() {
             }
         }
 
-        // --------------------------------------------------
         // 2. ADMIN: SINCRONIZAR
-        // --------------------------------------------------
         get("/admin/sincronizar") {
-            val listaBilhetes = newSuspendedTransaction(Dispatchers.IO) {
-                IndicadoService.IndicadoTable
+            // ⚠️ CORREÇÃO: db = databaseEstrelas
+            val listaBilhetes = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+                schemas.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
-                    .where { IndicadoService.IndicadoTable.stripeId.isNotNull() }
+                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId.isNotNull() }
                     .map {
                         mapOf(
-                            "stripeId" to it[IndicadoService.IndicadoTable.stripeId],
-                            "nome" to it[IndicadoService.IndicadoTable.nome],
-                            "categoria" to it[IndicadoService.IndicadoTable.categoriaId],
+                            "stripeId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId],
+                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            "categoria" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
                             "status" to "VALIDO"
                         )
                     }
@@ -139,9 +145,7 @@ fun Application.configureStripeModule() {
             call.respond(listaBilhetes)
         }
 
-        // --------------------------------------------------
         // 3. ADMIN: VALIDAR UM
-        // --------------------------------------------------
         get("/admin/validar/{stripeId}") {
             val codigoLido = call.parameters["stripeId"]
 
@@ -150,15 +154,16 @@ fun Application.configureStripeModule() {
                 return@get
             }
 
-            val indicadoEncontrado = newSuspendedTransaction(Dispatchers.IO) {
-                IndicadoService.IndicadoTable
+            // ⚠️ CORREÇÃO: db = databaseEstrelas
+            val indicadoEncontrado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+                schemas.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
-                    .where { IndicadoService.IndicadoTable.stripeId eq codigoLido }
+                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq codigoLido }
                     .map {
                         mapOf(
-                            "nome" to it[IndicadoService.IndicadoTable.nome],
-                            "categoriaId" to it[IndicadoService.IndicadoTable.categoriaId],
-                            "foto" to it[IndicadoService.IndicadoTable.imageData],
+                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            "categoriaId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
+                            "foto" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData],
                             "status" to "VALIDO"
                         )
                     }
@@ -172,14 +177,13 @@ fun Application.configureStripeModule() {
             }
         }
 
-        // --------------------------------------------------
         // 4. SALVAR PRÉ-INSCRIÇÃO (APP)
-        // --------------------------------------------------
         post("/inscricoes") {
             try {
                 val dto = call.receive<InscricaoDTO>()
 
-                val novoId = newSuspendedTransaction(Dispatchers.IO) {
+                // ⚠️ CORREÇÃO: db = databaseEstrelas
+                val novoId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                     PreInscricoesTable.insert {
                         it[nome] = dto.nome
                         it[instagram] = dto.instagram
@@ -200,16 +204,15 @@ fun Application.configureStripeModule() {
             }
         }
 
-        // --------------------------------------------------
         // 5. POLLING STATUS
-        // --------------------------------------------------
         get("/inscricoes/{id}") {
             val idParam = call.parameters["id"]?.toIntOrNull()
             if (idParam == null) {
                 call.respond(HttpStatusCode.BadRequest); return@get
             }
 
-            val statusAtual = newSuspendedTransaction(Dispatchers.IO) {
+            // ⚠️ CORREÇÃO: db = databaseEstrelas
+            val statusAtual = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                 PreInscricoesTable.selectAll()
                     .where { PreInscricoesTable.id eq idParam }
                     .map { it[PreInscricoesTable.status] }
@@ -223,13 +226,10 @@ fun Application.configureStripeModule() {
             }
         }
 
-        // --------------------------------------------------
         // 6. WEBHOOK STRIPE
-        // --------------------------------------------------
         post("/stripe-webhook") {
             val payload = call.receiveText()
             val sigHeader = call.request.header("Stripe-Signature")
-            val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
 
             if (webhookSecret == null) {
                 call.respond(HttpStatusCode.InternalServerError); return@post
@@ -253,7 +253,8 @@ fun Application.configureStripeModule() {
 
                     if (idTemp != null && stripeSessionId != null) {
 
-                        newSuspendedTransaction(Dispatchers.IO) {
+                        // ⚠️ CORREÇÃO: db = databaseEstrelas
+                        newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                             val row = PreInscricoesTable.selectAll()
                                 .where { PreInscricoesTable.id eq idTemp }
                                 .singleOrNull()
@@ -277,6 +278,7 @@ fun Application.configureStripeModule() {
                                     )
 
                                     val uuidIndicado = UUID.randomUUID().toString()
+                                    // Aqui usamos o service injetado, ele já tem o DB correto por dentro
                                     indicadoService.create(novoIndicado, uuidIndicado)
 
                                     println(">>> Pagamento Confirmado: ${novoIndicado.nome} <<<")
