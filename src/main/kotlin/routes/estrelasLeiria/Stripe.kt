@@ -31,11 +31,10 @@ import kotlin.concurrent.thread
 data class InscricaoDTO(
     val nome: String,
     val instagram: String,
-    val categoriaId: String,
+    val categoriaId: String, // String contendo múltiplos IDs separados por vírgula
     val descricaoDetalhada: String,
     val imageData: String,
-    val desejaParticiparVotacao: Boolean,
-    val quantidade: Int = 1 // NOVO CAMPO: Recebe a qtd do App
+    val desejaParticiparVotacao: Boolean
 )
 
 @Serializable
@@ -49,38 +48,38 @@ object PreInscricoesTable : Table("pre_inscricoes_v2") {
     val id = integer("id").autoIncrement()
     val nome = varchar("nome", 255)
     val instagram = varchar("instagram", 100)
-    val categoriaId = varchar("categoria_id", 500) // Suporta múltiplos IDs
+
+    // --- ALTERAÇÃO AQUI ---
+    // Aumentado para 500
+    val categoriaId = varchar("categoria_id", 500)
+
     val descricao = text("descricao")
     val imageData = largeText("image_data")
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
-
-    // NOVO: Salva a quantidade escolhida no checkout
-    val quantidade = integer("quantidade").default(1)
-
     val status = varchar("status", 20).default("AGUARDANDO")
 
     override val primaryKey = PrimaryKey(id)
 }
 
-// --- TABELA: INSCRITOS (Espectadores) ---
+// --- NOVA TABELA: INSCRITOS (Quem NÃO participa da votação) ---
 object InscritosTable : Table("inscritos") {
     val id = varchar("id", 36)
     val nome = varchar("nome", 255)
     val instagram = varchar("instagram", 100)
+
+    // --- ALTERAÇÃO AQUI ---
+    // Aumentado para 500
     val categoriaId = varchar("categoria_id", 500)
+
     val descricao = text("descricao")
     val imageData = largeText("image_data")
     val stripeId = varchar("stripe_id", 100).nullable()
     val email = varchar("email", 200).nullable()
 
-    // Controle de Validação
     val checkIn = bool("check_in").default(false)
+
     val checkInDate = varchar("check_in_date", 50).nullable()
-
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
-
-    // NOVO: Persiste a quantidade comprada
-    val quantidade = integer("quantidade").default(1)
 
     override val primaryKey = PrimaryKey(id)
 }
@@ -103,10 +102,9 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
     val emailService = EmailService()
     val databaseEstrelas by inject<Database>(named("EstrelasLeiriaDB"))
 
-    // Inicialização do Banco
     transaction(databaseEstrelas) {
-        // Cria tabelas e colunas faltantes automaticamente
         SchemaUtils.create(PreInscricoesTable)
+        // Isso tentará aumentar a coluna se o banco permitir, senão pode precisar de ALTER TABLE manual
         try { SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable) } catch (e: Exception) {}
 
         SchemaUtils.create(schemas.estrelasLeiria.IndicadoService.IndicadoTable)
@@ -123,9 +121,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
 
     routing {
 
-        // =====================================================================
-        // ROTA DE CHECK-IN (VALIDAÇÃO E ATUALIZAÇÃO)
-        // =====================================================================
         post("/admin/checkin") {
             val params = call.receive<Map<String, String>>()
             val stripeIdParam = params["stripeId"]
@@ -136,10 +131,10 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
 
             val resultado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+
                 val dataHoraAtual = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
 
-                // 1. Verifica se é CANDIDATO (Indicado)
-                // Candidatos geralmente representam 1 pessoa física no evento
+                // 1. Busca em INDICADOS
                 val indicadoRow = schemas.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
                     .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }
@@ -147,16 +142,13 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
 
                 if (indicadoRow != null) {
                     if (indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkIn]) {
-                        // ERRO: Já entrou
                         return@newSuspendedTransaction mapOf(
                             "status" to "ERRO_JA_USADO",
                             "mensagem" to "Este bilhete já foi validado anteriormente!",
                             "data_uso" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkInDate],
-                            "nome" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
-                            "quantidade" to 1
+                            "nome" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome]
                         )
                     } else {
-                        // SUCESSO: Libera entrada
                         schemas.estrelasLeiria.IndicadoService.IndicadoTable.update({ schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }) {
                             it[checkIn] = true
                             it[checkInDate] = dataHoraAtual
@@ -166,33 +158,26 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                             "nome" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
                             "tipo" to "CANDIDATO",
                             "categoria" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
-                            "foto" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData],
-                            "quantidade" to 1 // Candidato sempre conta como 1
+                            "foto" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData]
                         )
                     }
                 }
 
-                // 2. Verifica se é ESPECTADOR (Inscrito)
-                // Pode ter quantidade > 1
+                // 2. Busca em INSCRITOS (Correção aplicada aqui)
                 val inscritoRow = InscritosTable
                     .selectAll()
                     .where { InscritosTable.stripeId eq stripeIdParam }
                     .singleOrNull()
 
                 if (inscritoRow != null) {
-                    val qtdBilhetes = inscritoRow[InscritosTable.quantidade] // Pega do banco
-
                     if (inscritoRow[InscritosTable.checkIn]) {
-                        // ERRO: Já entrou
                         return@newSuspendedTransaction mapOf(
                             "status" to "ERRO_JA_USADO",
                             "mensagem" to "Bilhete já utilizado!",
                             "data_uso" to inscritoRow[InscritosTable.checkInDate],
-                            "nome" to inscritoRow[InscritosTable.nome],
-                            "quantidade" to qtdBilhetes
+                            "nome" to inscritoRow[InscritosTable.nome]
                         )
                     } else {
-                        // SUCESSO: Libera entrada
                         InscritosTable.update({ InscritosTable.stripeId eq stripeIdParam }) {
                             it[checkIn] = true
                             it[checkInDate] = dataHoraAtual
@@ -202,13 +187,11 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                             "nome" to inscritoRow[InscritosTable.nome],
                             "tipo" to "ESPECTADOR",
                             "categoria" to "Bilhete Geral",
-                            "foto" to inscritoRow[InscritosTable.imageData],
-                            "quantidade" to qtdBilhetes // Envia a quantidade correta para o App
+                            "foto" to inscritoRow[InscritosTable.imageData]
                         )
                     }
                 }
 
-                // 3. Não Encontrado
                 return@newSuspendedTransaction mapOf(
                     "status" to "ERRO_NAO_ENCONTRADO",
                     "mensagem" to "QR Code não existe no sistema."
@@ -223,141 +206,10 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
-        // =====================================================================
-        // CRIAÇÃO DE PRÉ-INSCRIÇÃO (APP)
-        // =====================================================================
-        post("/inscricoes") {
-            try {
-                val dto = call.receive<InscricaoDTO>()
 
-                val novoId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                    PreInscricoesTable.insert {
-                        it[nome] = dto.nome
-                        it[instagram] = dto.instagram
-                        it[categoriaId] = dto.categoriaId
-                        it[descricao] = dto.descricaoDetalhada
-                        it[imageData] = dto.imageData
-                        it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
-                        it[quantidade] = dto.quantidade // SALVA A QUANTIDADE DO APP
-                        it[status] = "AGUARDANDO"
-                    }[PreInscricoesTable.id]
-                }
 
-                println("Pré-inscrição: ID $novoId (Qtd: ${dto.quantidade})")
-                call.respond(HttpStatusCode.Created, mapOf("id" to novoId))
+        // ... (ROTA QRCode e Sincronizar permanecem iguais) ...
 
-            } catch (e: Exception) {
-                e.printStackTrace()
-                call.respond(HttpStatusCode.BadRequest, "Erro ao salvar: ${e.message}")
-            }
-        }
-
-        // =====================================================================
-        // WEBHOOK STRIPE (CONFIRMAÇÃO PAGAMENTO)
-        // =====================================================================
-        post("/stripe-webhook") {
-            val payload = call.receiveText()
-            val sigHeader = call.request.header("Stripe-Signature")
-            val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
-
-            if (webhookSecret == null) {
-                call.respond(HttpStatusCode.InternalServerError); return@post
-            }
-
-            try {
-                val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
-
-                if (event.type == "checkout.session.completed") {
-                    // Regex para extrair dados do JSON bruto do Stripe
-                    val regexRef = """"client_reference_id":\s*"(\d+)"""".toRegex()
-                    val regexStripeId = """"id":\s*"(cs_[a-zA-Z0-9_]+)"""".toRegex()
-                    val regexEmail = """"email":\s*"([^"]+)"""".toRegex()
-
-                    val matchRef = regexRef.find(payload)
-                    val matchStripe = regexStripeId.find(payload)
-                    val matchEmail = regexEmail.find(payload)
-
-                    val stripeSessionId = matchStripe?.groupValues?.get(1)
-                    val customerEmail = matchEmail?.groupValues?.get(1)
-                    val idTemp = matchRef?.groupValues?.get(1)?.toIntOrNull()
-
-                    if (idTemp != null && stripeSessionId != null) {
-
-                        newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                            val row = PreInscricoesTable.selectAll()
-                                .where { PreInscricoesTable.id eq idTemp }
-                                .singleOrNull()
-
-                            if (row != null) {
-                                if (row[PreInscricoesTable.status] != "PAGO") {
-
-                                    PreInscricoesTable.update({ PreInscricoesTable.id eq idTemp }) {
-                                        it[status] = "PAGO"
-                                    }
-
-                                    val querVotar = row[PreInscricoesTable.desejaParticiparVotacao]
-                                    val nomeParticipante = row[PreInscricoesTable.nome]
-                                    val quantidadeComprada = row[PreInscricoesTable.quantidade] // Pega qtd salva
-
-                                    if (querVotar) {
-                                        // --- CAMINHO A: INDICADOS ---
-                                        val novoIndicado = Indicado(
-                                            categoriaId = row[PreInscricoesTable.categoriaId],
-                                            nome = nomeParticipante,
-                                            instagram = row[PreInscricoesTable.instagram],
-                                            imageData = row[PreInscricoesTable.imageData],
-                                            descricaoDetalhada = row[PreInscricoesTable.descricao],
-                                            desejaParticiparVotacao = true,
-                                            stripeId = stripeSessionId,
-                                            email = customerEmail
-                                        )
-                                        val uuid = UUID.randomUUID().toString()
-                                        indicadoService.create(novoIndicado, uuid)
-                                        println(">>> Salvo em INDICADOS: $nomeParticipante")
-
-                                    } else {
-                                        // --- CAMINHO B: INSCRITOS (Com Quantidade) ---
-                                        InscritosTable.insert {
-                                            it[id] = UUID.randomUUID().toString()
-                                            it[nome] = nomeParticipante
-                                            it[instagram] = row[PreInscricoesTable.instagram]
-                                            it[categoriaId] = row[PreInscricoesTable.categoriaId]
-                                            it[descricao] = row[PreInscricoesTable.descricao]
-                                            it[imageData] = row[PreInscricoesTable.imageData]
-                                            it[desejaParticiparVotacao] = false
-                                            it[stripeId] = stripeSessionId
-                                            it[email] = customerEmail
-                                            it[quantidade] = quantidadeComprada // TRANSFERE QUANTIDADE
-                                        }
-                                        println(">>> Salvo em INSCRITOS: $nomeParticipante (Qtd: $quantidadeComprada)")
-                                    }
-
-                                    // Envio de E-mail
-                                    if (customerEmail != null) {
-                                        val qrBytes = gerarQrCodeBytes(stripeSessionId)
-                                        thread {
-                                            emailService.enviarBilhete(
-                                                destinatario = customerEmail,
-                                                nomeParticipante = nomeParticipante,
-                                                qrCodeBytes = qrBytes
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                call.respond(HttpStatusCode.OK)
-            } catch (e: Exception) {
-                println("Erro Webhook: ${e.message}")
-                call.respond(HttpStatusCode.BadRequest)
-            }
-        }
-
-        // =====================================================================
-        // OUTRAS ROTAS DE LEITURA
-        // =====================================================================
         get("/ingresso/qrcode/{id}") {
             val idParam = call.parameters["id"]
             if (idParam == null) { call.respond(HttpStatusCode.BadRequest); return@get }
@@ -387,6 +239,105 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
+        get("/admin/sincronizar") {
+            val listaCompleta = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+                val listaIndicados = schemas.estrelasLeiria.IndicadoService.IndicadoTable
+                    .selectAll()
+                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId.isNotNull() }
+                    .map {
+                        mapOf(
+                            "stripeId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId],
+                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            "categoria" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
+                            "status" to "VALIDO_VOTO"
+                        )
+                    }
+
+                val listaInscritos = InscritosTable
+                    .selectAll()
+                    .where { InscritosTable.stripeId.isNotNull() }
+                    .map {
+                        mapOf(
+                            "stripeId" to it[InscritosTable.stripeId],
+                            "nome" to it[InscritosTable.nome],
+                            "categoria" to it[InscritosTable.categoriaId],
+                            "status" to "VALIDO_SIMPLES"
+                        )
+                    }
+
+                listaIndicados + listaInscritos
+            }
+            call.respond(listaCompleta)
+        }
+
+        get("/admin/validar/{stripeId}") {
+            val codigoLido = call.parameters["stripeId"]
+            if (codigoLido == null) { call.respond(HttpStatusCode.BadRequest); return@get }
+
+            val bilheteEncontrado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+                var result = schemas.estrelasLeiria.IndicadoService.IndicadoTable
+                    .selectAll()
+                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq codigoLido }
+                    .map {
+                        mapOf(
+                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            "categoriaId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
+                            "foto" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData],
+                            "status" to "VALIDO (PARTICIPA VOTAÇÃO)"
+                        )
+                    }
+                    .singleOrNull()
+
+                if (result == null) {
+                    result = InscritosTable
+                        .selectAll()
+                        .where { InscritosTable.stripeId eq codigoLido }
+                        .map {
+                            mapOf(
+                                "nome" to it[InscritosTable.nome],
+                                "categoriaId" to it[InscritosTable.categoriaId],
+                                "foto" to it[InscritosTable.imageData],
+                                "status" to "VALIDO (NÃO PARTICIPA DA VOTAÇÃO)"
+                            )
+                        }
+                        .singleOrNull()
+                }
+                result
+            }
+
+            if (bilheteEncontrado != null) {
+                call.respond(HttpStatusCode.OK, bilheteEncontrado)
+            } else {
+                call.respond(HttpStatusCode.NotFound, mapOf("status" to "INVALIDO"))
+            }
+        }
+
+        post("/inscricoes") {
+            try {
+                val dto = call.receive<InscricaoDTO>()
+
+                val novoId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+                    PreInscricoesTable.insert {
+                        it[nome] = dto.nome
+                        it[instagram] = dto.instagram
+                        // Aqui salva a string com múltiplos IDs
+                        it[categoriaId] = dto.categoriaId
+                        it[descricao] = dto.descricaoDetalhada
+                        it[imageData] = dto.imageData
+                        it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
+                        it[status] = "AGUARDANDO"
+                    }[PreInscricoesTable.id]
+                }
+
+                println("Pré-inscrição: ID $novoId (Votação: ${dto.desejaParticiparVotacao})")
+                call.respond(HttpStatusCode.Created, mapOf("id" to novoId))
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.BadRequest, "Erro ao salvar: ${e.message}")
+            }
+        }
+
         get("/inscricoes/{id}") {
             val idParam = call.parameters["id"]?.toIntOrNull()
             if (idParam == null) { call.respond(HttpStatusCode.BadRequest); return@get }
@@ -405,82 +356,97 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
-        // ROTA PARA SINCRONIZAÇÃO OFFLINE
-        get("/admin/sincronizar") {
-            val listaCompleta = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                val listaIndicados = schemas.estrelasLeiria.IndicadoService.IndicadoTable
-                    .selectAll()
-                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId.isNotNull() }
-                    .map {
-                        mapOf(
-                            "stripeId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId],
-                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
-                            "categoria" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
-                            "status" to "VALIDO_VOTO",
-                            "quantidade" to 1
-                        )
-                    }
+        post("/stripe-webhook") {
+            val payload = call.receiveText()
+            val sigHeader = call.request.header("Stripe-Signature")
+            val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
 
-                val listaInscritos = InscritosTable
-                    .selectAll()
-                    .where { InscritosTable.stripeId.isNotNull() }
-                    .map {
-                        mapOf(
-                            "stripeId" to it[InscritosTable.stripeId],
-                            "nome" to it[InscritosTable.nome],
-                            "categoria" to it[InscritosTable.categoriaId],
-                            "status" to "VALIDO_SIMPLES",
-                            "quantidade" to it[InscritosTable.quantidade]
-                        )
-                    }
-
-                listaIndicados + listaInscritos
+            if (webhookSecret == null) {
+                call.respond(HttpStatusCode.InternalServerError); return@post
             }
-            call.respond(listaCompleta)
-        }
 
-        // ROTA PARA CONSULTA SIMPLES
-        get("/admin/validar/{stripeId}") {
-            val codigoLido = call.parameters["stripeId"]
-            if (codigoLido == null) { call.respond(HttpStatusCode.BadRequest); return@get }
+            try {
+                val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
 
-            val bilheteEncontrado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                var result = schemas.estrelasLeiria.IndicadoService.IndicadoTable
-                    .selectAll()
-                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq codigoLido }
-                    .map {
-                        mapOf(
-                            "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
-                            "categoriaId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
-                            "foto" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData],
-                            "status" to "VALIDO (PARTICIPA VOTAÇÃO)",
-                            "quantidade" to 1
-                        )
-                    }
-                    .singleOrNull()
+                if (event.type == "checkout.session.completed") {
+                    val regexRef = """"client_reference_id":\s*"(\d+)"""".toRegex()
+                    val regexStripeId = """"id":\s*"(cs_[a-zA-Z0-9_]+)"""".toRegex()
+                    val regexEmail = """"email":\s*"([^"]+)"""".toRegex()
 
-                if (result == null) {
-                    result = InscritosTable
-                        .selectAll()
-                        .where { InscritosTable.stripeId eq codigoLido }
-                        .map {
-                            mapOf(
-                                "nome" to it[InscritosTable.nome],
-                                "categoriaId" to it[InscritosTable.categoriaId],
-                                "foto" to it[InscritosTable.imageData],
-                                "status" to "VALIDO (NÃO PARTICIPA DA VOTAÇÃO)",
-                                "quantidade" to it[InscritosTable.quantidade]
-                            )
+                    val matchRef = regexRef.find(payload)
+                    val matchStripe = regexStripeId.find(payload)
+                    val matchEmail = regexEmail.find(payload)
+
+                    val stripeSessionId = matchStripe?.groupValues?.get(1)
+                    val customerEmail = matchEmail?.groupValues?.get(1)
+                    val idTemp = matchRef?.groupValues?.get(1)?.toIntOrNull()
+
+                    if (idTemp != null && stripeSessionId != null) {
+
+                        newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+                            val row = PreInscricoesTable.selectAll()
+                                .where { PreInscricoesTable.id eq idTemp }
+                                .singleOrNull()
+
+                            if (row != null) {
+                                if (row[PreInscricoesTable.status] != "PAGO") {
+
+                                    PreInscricoesTable.update({ PreInscricoesTable.id eq idTemp }) {
+                                        it[status] = "PAGO"
+                                    }
+
+                                    val querVotar = row[PreInscricoesTable.desejaParticiparVotacao]
+                                    val nomeParticipante = row[PreInscricoesTable.nome]
+
+                                    if (querVotar) {
+                                        val novoIndicado = Indicado(
+                                            categoriaId = row[PreInscricoesTable.categoriaId],
+                                            nome = nomeParticipante,
+                                            instagram = row[PreInscricoesTable.instagram],
+                                            imageData = row[PreInscricoesTable.imageData],
+                                            descricaoDetalhada = row[PreInscricoesTable.descricao],
+                                            desejaParticiparVotacao = true,
+                                            stripeId = stripeSessionId,
+                                            email = customerEmail
+                                        )
+                                        val uuid = UUID.randomUUID().toString()
+                                        indicadoService.create(novoIndicado, uuid)
+                                        println(">>> Salvo em INDICADOS: $nomeParticipante")
+
+                                    } else {
+                                        InscritosTable.insert {
+                                            it[id] = UUID.randomUUID().toString()
+                                            it[nome] = nomeParticipante
+                                            it[instagram] = row[PreInscricoesTable.instagram]
+                                            it[categoriaId] = row[PreInscricoesTable.categoriaId]
+                                            it[descricao] = row[PreInscricoesTable.descricao]
+                                            it[imageData] = row[PreInscricoesTable.imageData]
+                                            it[desejaParticiparVotacao] = false
+                                            it[stripeId] = stripeSessionId
+                                            it[email] = customerEmail
+                                        }
+                                        println(">>> Salvo em INSCRITOS: $nomeParticipante")
+                                    }
+
+                                    if (customerEmail != null) {
+                                        val qrBytes = gerarQrCodeBytes(stripeSessionId)
+                                        thread {
+                                            emailService.enviarBilhete(
+                                                destinatario = customerEmail,
+                                                nomeParticipante = nomeParticipante,
+                                                qrCodeBytes = qrBytes
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        .singleOrNull()
+                    }
                 }
-                result
-            }
-
-            if (bilheteEncontrado != null) {
-                call.respond(HttpStatusCode.OK, bilheteEncontrado)
-            } else {
-                call.respond(HttpStatusCode.NotFound, mapOf("status" to "INVALIDO"))
+                call.respond(HttpStatusCode.OK)
+            } catch (e: Exception) {
+                println("Erro Webhook: ${e.message}")
+                call.respond(HttpStatusCode.BadRequest)
             }
         }
     }
