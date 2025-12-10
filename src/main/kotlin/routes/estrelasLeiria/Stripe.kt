@@ -29,7 +29,7 @@ import kotlin.concurrent.thread
 data class InscricaoDTO(
     val nome: String,
     val instagram: String,
-    val categoriaId: String,
+    val categoriaId: String, // String contendo múltiplos IDs separados por vírgula
     val descricaoDetalhada: String,
     val imageData: String,
     val desejaParticiparVotacao: Boolean
@@ -46,7 +46,11 @@ object PreInscricoesTable : Table("pre_inscricoes_v2") {
     val id = integer("id").autoIncrement()
     val nome = varchar("nome", 255)
     val instagram = varchar("instagram", 100)
-    val categoriaId = varchar("categoria_id", 50)
+
+    // --- ALTERAÇÃO AQUI ---
+    // Aumentado para 500
+    val categoriaId = varchar("categoria_id", 500)
+
     val descricao = text("descricao")
     val imageData = largeText("image_data")
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
@@ -57,21 +61,23 @@ object PreInscricoesTable : Table("pre_inscricoes_v2") {
 
 // --- NOVA TABELA: INSCRITOS (Quem NÃO participa da votação) ---
 object InscritosTable : Table("inscritos") {
-    val id = varchar("id", 36) // UUID
+    val id = varchar("id", 36)
     val nome = varchar("nome", 255)
     val instagram = varchar("instagram", 100)
-    val categoriaId = varchar("categoria_id", 50)
+
+    // --- ALTERAÇÃO AQUI ---
+    // Aumentado para 500
+    val categoriaId = varchar("categoria_id", 500)
+
     val descricao = text("descricao")
     val imageData = largeText("image_data")
     val stripeId = varchar("stripe_id", 100).nullable()
     val email = varchar("email", 200).nullable()
-    // Campo fixo false, já que estão nesta tabela
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
 
     override val primaryKey = PrimaryKey(id)
 }
 
-// --- FUNÇÃO AUXILIAR ---
 fun gerarQrCodeBytes(conteudo: String): ByteArray {
     return try {
         val writer = QRCodeWriter()
@@ -90,17 +96,14 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
     val emailService = EmailService()
     val databaseEstrelas by inject<Database>(named("EstrelasLeiriaDB"))
 
-    // Inicialização das tabelas
     transaction(databaseEstrelas) {
-        // 1. Temporária
         SchemaUtils.create(PreInscricoesTable)
+        // Isso tentará aumentar a coluna se o banco permitir, senão pode precisar de ALTER TABLE manual
         try { SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable) } catch (e: Exception) {}
 
-        // 2. Indicados (Votação)
         SchemaUtils.create(schemas.estrelasLeiria.IndicadoService.IndicadoTable)
         try { SchemaUtils.createMissingTablesAndColumns(schemas.estrelasLeiria.IndicadoService.IndicadoTable) } catch (e: Exception) {}
 
-        // 3. Inscritos (Sem Votação) - NOVA
         SchemaUtils.create(InscritosTable)
         try { SchemaUtils.createMissingTablesAndColumns(InscritosTable) } catch (e: Exception) {}
     }
@@ -112,23 +115,19 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
 
     routing {
 
-        // --------------------------------------------------
-        // 1. ROTA DE QR CODE
-        // --------------------------------------------------
+        // ... (ROTA QRCode e Sincronizar permanecem iguais) ...
+
         get("/ingresso/qrcode/{id}") {
             val idParam = call.parameters["id"]
             if (idParam == null) { call.respond(HttpStatusCode.BadRequest); return@get }
 
-            // Procura em AMBAS as tabelas
             val stripeId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                // Tenta achar na tabela de Votação (Indicados)
                 var found = schemas.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
                     .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.id eq idParam }
                     .map { it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId] }
                     .singleOrNull()
 
-                // Se não achou, tenta na tabela de Apenas Inscritos
                 if (found == null) {
                     found = InscritosTable
                         .selectAll()
@@ -147,9 +146,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
-        // --------------------------------------------------
-        // 2. ADMIN: SINCRONIZAR (Baixa de ambas as tabelas)
-        // --------------------------------------------------
         get("/admin/sincronizar") {
             val listaCompleta = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                 val listaIndicados = schemas.estrelasLeiria.IndicadoService.IndicadoTable
@@ -176,21 +172,16 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                         )
                     }
 
-                // Junta as duas listas
                 listaIndicados + listaInscritos
             }
             call.respond(listaCompleta)
         }
 
-        // --------------------------------------------------
-        // 3. ADMIN: VALIDAR UM
-        // --------------------------------------------------
         get("/admin/validar/{stripeId}") {
             val codigoLido = call.parameters["stripeId"]
             if (codigoLido == null) { call.respond(HttpStatusCode.BadRequest); return@get }
 
             val bilheteEncontrado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                // 1. Busca em Indicados
                 var result = schemas.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
                     .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq codigoLido }
@@ -204,7 +195,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                     }
                     .singleOrNull()
 
-                // 2. Se não achou, busca em Inscritos
                 if (result == null) {
                     result = InscritosTable
                         .selectAll()
@@ -229,9 +219,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
-        // --------------------------------------------------
-        // 4. SALVAR PRÉ-INSCRIÇÃO (APP)
-        // --------------------------------------------------
         post("/inscricoes") {
             try {
                 val dto = call.receive<InscricaoDTO>()
@@ -240,6 +227,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                     PreInscricoesTable.insert {
                         it[nome] = dto.nome
                         it[instagram] = dto.instagram
+                        // Aqui salva a string com múltiplos IDs
                         it[categoriaId] = dto.categoriaId
                         it[descricao] = dto.descricaoDetalhada
                         it[imageData] = dto.imageData
@@ -257,9 +245,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
-        // --------------------------------------------------
-        // 5. POLLING STATUS
-        // --------------------------------------------------
         get("/inscricoes/{id}") {
             val idParam = call.parameters["id"]?.toIntOrNull()
             if (idParam == null) { call.respond(HttpStatusCode.BadRequest); return@get }
@@ -278,9 +263,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
-        // --------------------------------------------------
-        // 6. WEBHOOK STRIPE (LÓGICA PRINCIPAL ALTERADA)
-        // --------------------------------------------------
         post("/stripe-webhook") {
             val payload = call.receiveText()
             val sigHeader = call.request.header("Stripe-Signature")
@@ -309,7 +291,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                     if (idTemp != null && stripeSessionId != null) {
 
                         newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                            // Busca na tabela temporária
                             val row = PreInscricoesTable.selectAll()
                                 .where { PreInscricoesTable.id eq idTemp }
                                 .singleOrNull()
@@ -317,17 +298,14 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                             if (row != null) {
                                 if (row[PreInscricoesTable.status] != "PAGO") {
 
-                                    // 1. Atualiza Status
                                     PreInscricoesTable.update({ PreInscricoesTable.id eq idTemp }) {
                                         it[status] = "PAGO"
                                     }
 
-                                    // 2. Verifica a escolha do usuário
                                     val querVotar = row[PreInscricoesTable.desejaParticiparVotacao]
                                     val nomeParticipante = row[PreInscricoesTable.nome]
 
                                     if (querVotar) {
-                                        // --- CAMINHO A: INDICADOS (Participa da Votação) ---
                                         val novoIndicado = Indicado(
                                             categoriaId = row[PreInscricoesTable.categoriaId],
                                             nome = nomeParticipante,
@@ -340,10 +318,9 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                         )
                                         val uuid = UUID.randomUUID().toString()
                                         indicadoService.create(novoIndicado, uuid)
-                                        println(">>> Salvo em INDICADOS (Votação): $nomeParticipante")
+                                        println(">>> Salvo em INDICADOS: $nomeParticipante")
 
                                     } else {
-                                        // --- CAMINHO B: INSCRITOS (Apenas Bilhete) ---
                                         InscritosTable.insert {
                                             it[id] = UUID.randomUUID().toString()
                                             it[nome] = nomeParticipante
@@ -355,10 +332,9 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                             it[stripeId] = stripeSessionId
                                             it[email] = customerEmail
                                         }
-                                        println(">>> Salvo em INSCRITOS (Sem Votação): $nomeParticipante")
+                                        println(">>> Salvo em INSCRITOS: $nomeParticipante")
                                     }
 
-                                    // 3. Envia E-mail (Igual para ambos)
                                     if (customerEmail != null) {
                                         val qrBytes = gerarQrCodeBytes(stripeSessionId)
                                         thread {

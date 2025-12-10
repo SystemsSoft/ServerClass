@@ -13,12 +13,11 @@ import org.jetbrains.exposed.sql.transactions.transaction
 
 @Serializable
 data class Indicado(
-    val categoriaId: String,
+    val categoriaId: String, // Agora suporta string longa ("id1,id2,id3")
     val nome: String,
     val instagram: String,
-    val imageData: String, // Base64
+    val imageData: String,
     val descricaoDetalhada: String,
-    // NOVOS CAMPOS
     val stripeId: String? = null,
     val desejaParticiparVotacao: Boolean,
     val email: String? = null
@@ -30,9 +29,8 @@ data class IndicadoDto(
     val categoriaId: String,
     val nome: String,
     val instagram: String,
-    val imageData: String, // Base64
+    val imageData: String,
     val descricaoDetalhada: String,
-    // NOVOS CAMPOS NA SAÍDA
     val stripeId: String?,
     val desejaParticiparVotacao: Boolean,
     val email: String?
@@ -44,7 +42,7 @@ data class IndicadoUpdate(
     val nome: String,
     val instagram: String,
     val descricaoDetalhada: String,
-    val desejaParticiparVotacao: Boolean // Permite admin alterar status
+    val desejaParticiparVotacao: Boolean
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -53,16 +51,18 @@ class IndicadoService(private val database: Database) {
     // TABELA
     object IndicadoTable : Table("indicados") {
         val id = varchar("id", length = 36)
-        val categoriaId = varchar("categoriaId", length = 36)
+
+        // --- ALTERAÇÃO AQUI ---
+        // Aumentado para 500 para suportar múltiplos IDs concatenados
+        val categoriaId = varchar("categoriaId", length = 500)
+
         val nome = varchar("nome", length = 100)
         val instagram = varchar("instagram", length = 100)
 
-        // NOVOS CAMPOS
         val email = varchar("email", length = 200).nullable()
         val stripeId = varchar("stripe_id", length = 100).nullable()
         val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
 
-        // IMPORTANTE: largeText para suportar Base64 grande (MySQL LONGTEXT)
         val imageData = largeText("image_data")
         val descricaoDetalhada = varchar("descricaoDetalhada", length = 1000)
 
@@ -72,7 +72,6 @@ class IndicadoService(private val database: Database) {
     init {
         transaction(database) {
             SchemaUtils.create(IndicadoTable)
-            // Atualiza o banco automaticamente com as novas colunas se a tabela já existir
             SchemaUtils.createMissingTablesAndColumns(IndicadoTable)
         }
     }
@@ -90,8 +89,6 @@ class IndicadoService(private val database: Database) {
                 it[instagram] = indicado.instagram
                 it[imageData] = indicado.imageData
                 it[descricaoDetalhada] = indicado.descricaoDetalhada
-
-                // Salva os novos campos
                 it[stripeId] = indicado.stripeId
                 it[desejaParticiparVotacao] = indicado.desejaParticiparVotacao
                 it[email] = indicado.email
@@ -109,7 +106,6 @@ class IndicadoService(private val database: Database) {
     // ATUALIZAÇÃO
     suspend fun update(id: String, indicado: IndicadoUpdate) {
         dbQuery {
-            // Lógica para preservar a imagem, já que o UpdateDTO não traz imagem
             val currentIndicado = IndicadoTable.selectAll().where { IndicadoTable.id eq id }.singleOrNull()
             val currentImageData = currentIndicado?.get(IndicadoTable.imageData)
 
@@ -120,7 +116,6 @@ class IndicadoService(private val database: Database) {
                 it[desejaParticiparVotacao] = indicado.desejaParticiparVotacao
                 it[descricaoDetalhada] = indicado.descricaoDetalhada
 
-                // Mantém a imagem antiga se existir
                 if (currentImageData != null) {
                     it[imageData] = currentImageData
                 }
@@ -144,11 +139,9 @@ class IndicadoService(private val database: Database) {
             instagram = row[IndicadoTable.instagram],
             imageData = row[IndicadoTable.imageData],
             descricaoDetalhada = row[IndicadoTable.descricaoDetalhada],
-
-            // Mapeamento dos Novos Campos
             stripeId = row[IndicadoTable.stripeId],
             desejaParticiparVotacao = row[IndicadoTable.desejaParticiparVotacao],
-            email = row[IndicadoTable.email] // Corrigido: Agora mapeia o email
+            email = row[IndicadoTable.email]
         )
     }
 }
