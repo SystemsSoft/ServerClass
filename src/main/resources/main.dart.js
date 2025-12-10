@@ -41890,7 +41890,7 @@ break}m.a5(new A.aoe(m))
 f=B.b.bs(g,",")
 l=new A.a66(m.w.a.a,m.x.a.a,f,m.y.a.a,m.ay,!0)
 p=4
-g=A.dp("http://192.168.29.45:8080/inscricoes",0,null)
+g=A.dp("https://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes",0,null)
 e=t.N
 e=A.ar(["Content-Type","application/json"],e,e)
 s=7
@@ -42081,7 +42081,7 @@ if(h!=null){A.c6(h,!0).dS()
 i.PS("Tempo esgotado. O pagamento n\xe3o foi confirmado.\nSe voc\xea pagou, entre em contato com o suporte.")}s=1
 break}p=4
 s=7
-return A.Q(A.auP(A.dp("http://192.168.29.45:8080/inscricoes/"+n.c,0,null)),$async$$1)
+return A.Q(A.auP(A.dp("https://athennaserver-5c57d33a2f13.herokuapp.com/inscricoes/"+n.c,0,null)),$async$$1)
 case 7:m=c
 if(m.b===200){i=m
 l=B.bq.qI(A.aFG(A.aEG(i.e)).ex(i.w),null)
