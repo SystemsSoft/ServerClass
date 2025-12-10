@@ -13,14 +13,16 @@ import org.jetbrains.exposed.sql.transactions.transaction
 
 @Serializable
 data class Indicado(
-    val categoriaId: String, // Agora suporta string longa ("id1,id2,id3")
+    val categoriaId: String,
     val nome: String,
     val instagram: String,
     val imageData: String,
     val descricaoDetalhada: String,
     val stripeId: String? = null,
     val desejaParticiparVotacao: Boolean,
-    val email: String? = null
+    val email: String? = null,
+    // --- NOVO CAMPO NO CONSTRUTOR ---
+    val quantidade: Int = 1
 )
 
 @Serializable
@@ -33,7 +35,8 @@ data class IndicadoDto(
     val descricaoDetalhada: String,
     val stripeId: String?,
     val desejaParticiparVotacao: Boolean,
-    val email: String?
+    val email: String?,
+    val quantidade: Int // Adicione aqui se quiser ler depois
 )
 
 @Serializable
@@ -98,6 +101,7 @@ class IndicadoService(private val database: Database) {
                 it[stripeId] = indicado.stripeId
                 it[desejaParticiparVotacao] = indicado.desejaParticiparVotacao
                 it[email] = indicado.email
+                it[quantidade] = indicado.quantidade
             }[IndicadoTable.id]
         }
     }
@@ -147,7 +151,8 @@ class IndicadoService(private val database: Database) {
             descricaoDetalhada = row[IndicadoTable.descricaoDetalhada],
             stripeId = row[IndicadoTable.stripeId],
             desejaParticiparVotacao = row[IndicadoTable.desejaParticiparVotacao],
-            email = row[IndicadoTable.email]
+            email = row[IndicadoTable.email],
+            quantidade = row[IndicadoTable.quantidade]
         )
     }
 }
