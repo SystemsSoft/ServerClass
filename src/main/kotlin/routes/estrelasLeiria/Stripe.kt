@@ -316,7 +316,8 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                         descricaoDetalhada = row[PreInscricoesTable.descricao],
                                         desejaParticiparVotacao = true,
                                         stripeId = stripeSessionId,
-                                        email = customerEmail
+                                        email = customerEmail,
+                                        quantidade = row[PreInscricoesTable.quantidade]
                                     )
                                     indicadoService.create(novoIndicado, UUID.randomUUID().toString())
                                 } else {
