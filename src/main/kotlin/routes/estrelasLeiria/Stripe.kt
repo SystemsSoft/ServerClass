@@ -21,6 +21,8 @@ import org.koin.ktor.ext.inject
 import schemas.estrelasLeiria.Indicado
 import schemas.estrelasLeiria.IndicadoService
 import java.io.ByteArrayOutputStream
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.concurrent.thread
 
@@ -73,6 +75,10 @@ object InscritosTable : Table("inscritos") {
     val imageData = largeText("image_data")
     val stripeId = varchar("stripe_id", 100).nullable()
     val email = varchar("email", 200).nullable()
+
+    val checkIn = bool("check_in").default(false)
+
+    val checkInDate = varchar("check_in_date", 50).nullable()
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
 
     override val primaryKey = PrimaryKey(id)
@@ -114,6 +120,93 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
     if (stripeKey != null) Stripe.apiKey = stripeKey
 
     routing {
+
+        post("/admin/checkin") {
+            val params = call.receive<Map<String, String>>()
+            val stripeIdParam = params["stripeId"]
+
+            if (stripeIdParam == null) {
+                call.respond(HttpStatusCode.BadRequest, "ID não fornecido")
+                return@post
+            }
+
+            val resultado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
+
+                val dataHoraAtual = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
+
+                // 1. Busca em INDICADOS
+                val indicadoRow = schemas.estrelasLeiria.IndicadoService.IndicadoTable
+                    .selectAll()
+                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }
+                    .singleOrNull()
+
+                if (indicadoRow != null) {
+                    if (indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkIn]) {
+                        return@newSuspendedTransaction mapOf(
+                            "status" to "ERRO_JA_USADO",
+                            "mensagem" to "Este bilhete já foi validado anteriormente!",
+                            "data_uso" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkInDate],
+                            "nome" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome]
+                        )
+                    } else {
+                        schemas.estrelasLeiria.IndicadoService.IndicadoTable.update({ schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }) {
+                            it[checkIn] = true
+                            it[checkInDate] = dataHoraAtual
+                        }
+                        return@newSuspendedTransaction mapOf(
+                            "status" to "SUCESSO",
+                            "nome" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            "tipo" to "CANDIDATO",
+                            "categoria" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
+                            "foto" to indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData]
+                        )
+                    }
+                }
+
+                // 2. Busca em INSCRITOS (Correção aplicada aqui)
+                val inscritoRow = InscritosTable
+                    .selectAll()
+                    .where { InscritosTable.stripeId eq stripeIdParam }
+                    .singleOrNull()
+
+                if (inscritoRow != null) {
+                    if (inscritoRow[InscritosTable.checkIn]) {
+                        return@newSuspendedTransaction mapOf(
+                            "status" to "ERRO_JA_USADO",
+                            "mensagem" to "Bilhete já utilizado!",
+                            "data_uso" to inscritoRow[InscritosTable.checkInDate],
+                            "nome" to inscritoRow[InscritosTable.nome]
+                        )
+                    } else {
+                        InscritosTable.update({ InscritosTable.stripeId eq stripeIdParam }) {
+                            it[checkIn] = true
+                            it[checkInDate] = dataHoraAtual
+                        }
+                        return@newSuspendedTransaction mapOf(
+                            "status" to "SUCESSO",
+                            "nome" to inscritoRow[InscritosTable.nome],
+                            "tipo" to "ESPECTADOR",
+                            "categoria" to "Bilhete Geral",
+                            "foto" to inscritoRow[InscritosTable.imageData]
+                        )
+                    }
+                }
+
+                return@newSuspendedTransaction mapOf(
+                    "status" to "ERRO_NAO_ENCONTRADO",
+                    "mensagem" to "QR Code não existe no sistema."
+                )
+            }
+
+            when (resultado["status"]) {
+                "SUCESSO" -> call.respond(HttpStatusCode.OK, resultado)
+                "ERRO_JA_USADO" -> call.respond(HttpStatusCode.Conflict, resultado)
+                "ERRO_NAO_ENCONTRADO" -> call.respond(HttpStatusCode.NotFound, resultado)
+                else -> call.respond(HttpStatusCode.InternalServerError)
+            }
+        }
+
+
 
         // ... (ROTA QRCode e Sincronizar permanecem iguais) ...
 
