@@ -66,6 +66,8 @@ class IndicadoService(private val database: Database) {
         val imageData = largeText("image_data")
         val descricaoDetalhada = varchar("descricaoDetalhada", length = 1000)
 
+        val quantidade = integer("quantidade").default(1)
+
         val checkIn = bool("check_in").default(false)
         // Controla se já entrou
         val checkInDate = varchar("check_in_date", 50).nullable()

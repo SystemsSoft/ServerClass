@@ -134,20 +134,27 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             val resultado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                 val dataHoraAtual = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
 
-                // 1. Check INDICADOS
+                // =========================================================
+                // 1. Check INDICADOS (Candidatos)
+                // =========================================================
                 val indicadoRow = schemas.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
                     .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }
                     .singleOrNull()
 
                 if (indicadoRow != null) {
+                    // --- CORREÇÃO: Ler a quantidade do banco em vez de forçar 1 ---
+                    // Se a coluna não existir ainda no banco físico, pode dar erro se não rodar a migration
+                    // Certifique-se de que a coluna 'quantidade' existe na tabela 'indicados'
+                    val qtdIndicado = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]
+
                     if (indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkIn]) {
                         return@newSuspendedTransaction CheckInResponse(
                             status = "ERRO_JA_USADO",
                             mensagem = "Este bilhete já foi validado anteriormente!",
                             data_uso = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkInDate],
                             nome = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
-                            quantidade = 1
+                            quantidade = qtdIndicado // <--- USA A QUANTIDADE DO BANCO
                         )
                     } else {
                         schemas.estrelasLeiria.IndicadoService.IndicadoTable.update({ schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }) {
@@ -160,12 +167,14 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                             tipo = "CANDIDATO",
                             categoria = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
                             foto = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData],
-                            quantidade = 1
+                            quantidade = qtdIndicado // <--- USA A QUANTIDADE DO BANCO
                         )
                     }
                 }
 
-                // 2. Check INSCRITOS
+                // =========================================================
+                // 2. Check INSCRITOS (Espectadores)
+                // =========================================================
                 val inscritoRow = InscritosTable
                     .selectAll()
                     .where { InscritosTable.stripeId eq stripeIdParam }
