@@ -9,8 +9,8 @@ class EmailService {
     // Configurações SMTP (Variáveis de Ambiente)
     private val host = System.getenv("SMTP_HOST") ?: "smtp.gmail.com"
     private val port = System.getenv("SMTP_PORT")?.toInt() ?: 587
-    private val username = System.getenv("SMTP_USER") ?: "estrelasleiria@gmail.com"
-    private val password = System.getenv("SMTP_PASS") ?: "expp saxd ouku dxqi"
+    private val username = System.getenv("SMTP_USER") ?: "contato@estrelasdeleiria.pt"
+    private val password = System.getenv("SMTP_PASS") ?: "rgcz dusq pfxz nxos"
 
     // Links Oficiais
     private val siteUrl = "https://www.estrelasdeleiria.pt"
