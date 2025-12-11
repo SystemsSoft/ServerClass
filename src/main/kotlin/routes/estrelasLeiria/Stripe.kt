@@ -5,7 +5,9 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.client.j2se.MatrixToImageWriter
 import com.google.zxing.qrcode.QRCodeWriter
 import com.stripe.Stripe
+import com.stripe.model.checkout.Session
 import com.stripe.net.Webhook
+import com.stripe.param.checkout.SessionRetrieveParams
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -142,7 +144,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                     .singleOrNull()
 
                 if (indicadoRow != null) {
-                    // LÊ A QUANTIDADE DO BANCO
                     val qtdIndicado = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]
 
                     if (indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkIn]) {
@@ -217,7 +218,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
         }
 
         // =====================================================================
-        // WEBHOOK (AQUI ESTÁ O AJUSTE DA QUANTIDADE)
+        // WEBHOOK (QUANTIDADE CORRETA DO STRIPE)
         // =====================================================================
         post("/stripe-webhook") {
             val payload = call.receiveText()
@@ -236,24 +237,32 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                     val regexStripeId = """"id":\s*"(cs_[a-zA-Z0-9_]+)"""".toRegex()
                     val regexEmail = """"email":\s*"([^"]+)"""".toRegex()
 
-                    // --- 1. Regex para capturar a quantidade do JSON do Stripe ---
-                    val regexQuantity = """"quantity":\s*(\d+)"""".toRegex()
-
                     val matchRef = regexRef.find(payload)
                     val matchStripe = regexStripeId.find(payload)
                     val matchEmail = regexEmail.find(payload)
-
-                    // Captura a quantidade (se existir no JSON)
-                    val matchQuantity = regexQuantity.find(payload)
 
                     val stripeSessionId = matchStripe?.groupValues?.get(1)
                     val customerEmail = matchEmail?.groupValues?.get(1)
                     val idTemp = matchRef?.groupValues?.get(1)?.toIntOrNull()
 
-                    // Extrai o valor inteiro
-                    val stripeQuantity = matchQuantity?.groupValues?.get(1)?.toIntOrNull()
-
                     if (idTemp != null && stripeSessionId != null) {
+
+                        // --- BUSCA A QUANTIDADE REAL NA API DO STRIPE ---
+                        var quantidadeReal = 1
+                        try {
+                            val params = SessionRetrieveParams.builder()
+                                .addExpand("line_items")
+                                .build()
+
+                            val session = Session.retrieve(stripeSessionId, params, null)
+                            val lineItem = session.lineItems.data.firstOrNull()
+                            if (lineItem != null && lineItem.quantity != null) {
+                                quantidadeReal = lineItem.quantity.toInt()
+                            }
+                            println(">>> Stripe API: Quantidade detectada = $quantidadeReal")
+                        } catch (ex: Exception) {
+                            println(">>> Erro ao buscar quantidade no Stripe: ${ex.message}. Usando 1.")
+                        }
 
                         newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                             val row = PreInscricoesTable.selectAll()
@@ -267,12 +276,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
 
                                 val querVotar = row[PreInscricoesTable.desejaParticiparVotacao]
                                 val nomeParticipante = row[PreInscricoesTable.nome]
-                                val qtdBanco = row[PreInscricoesTable.quantidade]
-
-                                // --- 2. Lógica de Prioridade: Stripe > Banco > 1 ---
-                                val qtdFinal = stripeQuantity ?: qtdBanco ?: 1
-
-                                println(">>> Webhook: ID=$idTemp, QtdStripe=$stripeQuantity, QtdBanco=$qtdBanco -> Final=$qtdFinal")
+                                val qtdFinal = quantidadeReal // Usa a quantidade da API
 
                                 if (querVotar) {
                                     val novoIndicado = Indicado(
@@ -284,8 +288,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                         desejaParticiparVotacao = true,
                                         stripeId = stripeSessionId,
                                         email = customerEmail,
-                                        // Usa a quantidade final
-                                        quantidade = qtdFinal
+                                        quantidade = qtdFinal // Salva a quantidade correta
                                     )
                                     indicadoService.create(novoIndicado, UUID.randomUUID().toString())
 
@@ -300,8 +303,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                         it[desejaParticiparVotacao] = false
                                         it[stripeId] = stripeSessionId
                                         it[email] = customerEmail
-                                        // Usa a quantidade final
-                                        it[quantidade] = qtdFinal
+                                        it[quantidade] = qtdFinal // Salva a quantidade correta
                                     }
                                 }
 
@@ -339,7 +341,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                         it[descricao] = dto.descricaoDetalhada
                         it[imageData] = dto.imageData
                         it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
-                        it[quantidade] = dto.quantidade
+                        it[quantidade] = 1 // Default inicial (será atualizado pelo Webhook)
                         it[status] = "AGUARDANDO"
                     }[PreInscricoesTable.id]
                 }
