@@ -6,45 +6,59 @@ import java.net.URL
 
 class EmailService {
 
+    // Configurações SMTP (Variáveis de Ambiente)
     private val host = System.getenv("SMTP_HOST") ?: "smtp.gmail.com"
     private val port = System.getenv("SMTP_PORT")?.toInt() ?: 587
     private val username = System.getenv("SMTP_USER") ?: "estrelasleiria@gmail.com"
     private val password = System.getenv("SMTP_PASS") ?: "expp saxd ouku dxqi"
 
+    // Links Oficiais
+    private val siteUrl = "https://www.estrelasdeleiria.pt"
+
     fun enviarBilhete(destinatario: String, nomeParticipante: String, qrCodeBytes: ByteArray, quantidade: Int) {
         try {
+            // 1. Configuração do Servidor de E-mail
             val email = HtmlEmail()
             email.hostName = host
             email.setSmtpPort(port)
             email.setAuthentication(username, password)
             email.isStartTLSEnabled = true
-            email.setCharset("UTF-8")
+            email.setCharset("UTF-8") // Importante para acentos
 
             email.setFrom(username, "Gala Estrelas de Leiria")
             email.subject = "O Seu Bilhete - Gala Estrelas de Leiria 2025"
             email.addTo(destinatario)
 
-            // --- 1. PREPARAR IMAGENS (Logo e QR Code) ---
+            // 2. Tratamento de Imagens (CID - Content ID)
 
-            // A. Logo (Resources)
-            var logoCid = ""
+            // A. Logótipo (Vem dos Resources)
+            var logoHtml = "<h1 style='color:#DAA520; margin:0;'>ESTRELAS DE LEIRIA</h1>" // Fallback texto
             try {
                 val logoUrl: URL? = this::class.java.classLoader.getResource("logo-estrelas.webp")
-                if (logoUrl != null) logoCid = email.embed(logoUrl, "Logo Estrelas")
-            } catch (e: Exception) { println("Erro logo: ${e.message}") }
+                if (logoUrl != null) {
+                    val logoCid = email.embed(logoUrl, "Logo Estrelas")
+                    // HTML da imagem com Link
+                    logoHtml = """
+                        <a href="$siteUrl" target="_blank" style="text-decoration:none; border:0; outline:none;">
+                            <img src="cid:$logoCid" alt="Estrelas de Leiria" width="150" style="display:block; border:0; margin-bottom:15px; max-width:150px;" />
+                        </a>
+                    """.trimIndent()
+                } else {
+                    println("⚠️ Aviso: logo.png não encontrado em src/main/resources")
+                }
+            } catch (e: Exception) {
+                println("⚠️ Erro ao processar logo: ${e.message}")
+            }
 
-            val logoHtml = if (logoCid.isNotEmpty()) "<img src='cid:$logoCid' alt='Estrelas de Leiria' width='150' style='display:block; border:0; margin-bottom:15px; max-width:150px;' />" else "<h1 style='color:#DAA520;'>ESTRELAS DE LEIRIA</h1>"
-
-            // B. QR Code (Memória) -> Para embutir no CORPO
+            // B. QR Code (Vem da Memória/Bytes)
             val qrDataSource = ByteArrayDataSource(qrCodeBytes, "image/png")
-            // O comando 'embed' anexa a imagem de forma oculta e retorna o ID para usar no HTML
             val qrCid = email.embed(qrDataSource, "qrcode_acesso")
 
-            // Variáveis de texto
+            // 3. Lógica de Textos
             val textoPessoas = if (quantidade > 1) "PESSOAS" else "PESSOA"
             val textoBilhetes = if (quantidade > 1) "bilhetes" else "bilhete"
 
-            // --- 2. HTML (Com QR Code visível) ---
+            // 4. Construção do HTML (Template de E-mail Responsivo/Escuro)
             val mensagemHtml = """
                 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
                 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -53,6 +67,8 @@ class EmailService {
                     <title>Bilhete Estrelas de Leiria</title>
                     <style>
                         body { margin: 0; padding: 0; background-color: #121212; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+                        a { text-decoration: none; color: #DAA520; }
+                        img { display: block; border: 0; }
                     </style>
                 </head>
                 <body style="margin: 0; padding: 0; background-color: #121212;">
@@ -83,23 +99,31 @@ class EmailService {
                                                     <td align="center" style="padding: 30px 20px;">
                                                         <p style="margin: 0 0 15px 0; font-size: 12px; color: #aaaaaa; text-transform: uppercase; letter-spacing: 1px;">Apresente este código à entrada</p>
                                                         
-                                                        <div style="background-color: #FFFFFF; padding: 15px; display: inline-block; border-radius: 8px;">
-                                                            <img src="cid:$qrCid" alt="QR Code" width="200" height="200" style="display:block;" />
-                                                        </div>
+                                                        <table border="0" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px;">
+                                                            <tr>
+                                                                <td style="padding: 15px;">
+                                                                    <img src="cid:$qrCid" alt="QR Code" width="200" height="200" style="display:block;" />
+                                                                </td>
+                                                            </tr>
+                                                        </table>
                                                         
                                                         <br>
 
-                                                        <div style="background-color: #DAA520; color: #000000; padding: 8px 20px; border-radius: 20px; font-weight: bold; font-size: 16px; display: inline-block; margin-top: 20px;">
+                                                        <div style="background-color: #DAA520; color: #000000; padding: 10px 25px; border-radius: 50px; font-weight: bold; font-size: 16px; display: inline-block; margin-top: 15px;">
                                                             VÁLIDO PARA: $quantidade $textoPessoas
                                                         </div>
                                                     </td>
                                                 </tr>
                                             </table>
 
-                                            <p style="font-size: 14px; color: #888888; margin-top: 30px;">
-                                                Sugerimos que aumente o brilho do telemóvel ao apresentar o bilhete.
+                                            <p style="font-size: 14px; color: #888888; margin-top: 20px;">
+                                                Para mais informações sobre o programa, local e regulamento, visite o nosso site.
                                             </p>
                                             
+                                            <a href="$siteUrl" target="_blank" style="background-color: #DAA520; color: #000000; padding: 12px 30px; text-decoration: none; font-weight: bold; border-radius: 4px; display: inline-block; margin-top: 10px; font-size: 14px;">
+                                                VISITAR SITE OFICIAL
+                                            </a>
+
                                             <p style="margin-top: 40px; font-style: italic; color: #e0e0e0;">
                                                 Com os melhores cumprimentos,<br>
                                                 <strong style="color: #DAA520;">A Organização Estrelas de Leiria</strong>
@@ -109,7 +133,10 @@ class EmailService {
 
                                     <tr>
                                         <td align="center" style="background-color: #000000; padding: 20px; font-size: 12px; color: #666666; border-top: 1px solid #333333;">
-                                            <p style="margin: 5px 0;">&copy; 2025 Estrelas de Leiria.</p>
+                                            <p style="margin: 5px 0;">&copy; 2025 Estrelas de Leiria. Todos os direitos reservados.</p>
+                                            <p style="margin: 5px 0;">
+                                                <a href="$siteUrl" target="_blank" style="color: #888888; text-decoration: none;">www.estrelasdeleiria.pt</a>
+                                            </p>
                                         </td>
                                     </tr>
                                 </table>
@@ -123,13 +150,12 @@ class EmailService {
 
             email.setHtmlMsg(mensagemHtml)
 
-            // --- 3. ANEXO (Backup) ---
-            // Além de estar no corpo, mantemos como anexo caso a pessoa queira fazer download
-            // Usamos o mesmo dataSource que já criámos
+            // 5. Anexar QR Code (Backup)
             email.attach(qrDataSource, "Bilhete_Estrelas_Leiria.png", "QR Code de Acesso (Backup)")
 
+            // 6. Enviar
             email.send()
-            println("📧 E-mail enviado com sucesso para: $destinatario")
+            println("📧 E-mail enviado com sucesso para: $destinatario (Qtd: $quantidade)")
 
         } catch (e: Exception) {
             println("❌ Erro ao enviar e-mail: ${e.message}")
