@@ -28,7 +28,7 @@ class EmailService {
             var logoCid = ""
             try {
                 // Tenta carregar dos resources
-                val logoUrl: URL? = this::class.java.classLoader.getResource("logo.png")
+                val logoUrl: URL? = this::class.java.classLoader.getResource("logo-estrelas.webp")
 
                 if (logoUrl != null) {
                     logoCid = email.embed(logoUrl, "Logo Estrelas")
