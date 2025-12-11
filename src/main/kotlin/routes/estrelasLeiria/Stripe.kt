@@ -313,7 +313,8 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                         emailService.enviarBilhete(
                                             destinatario = customerEmail,
                                             nomeParticipante = nomeParticipante,
-                                            qrCodeBytes = qrBytes
+                                            qrCodeBytes = qrBytes,
+                                            quantidade = qtdFinal
                                         )
                                     }
                                 }

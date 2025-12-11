@@ -11,7 +11,8 @@ class EmailService {
     private val username = System.getenv("SMTP_USER") ?: "estrelasleiria@gmail.com"
     private val password = System.getenv("SMTP_PASS") ?: "expp saxd ouku dxqi"
 
-    fun enviarBilhete(destinatario: String, nomeParticipante: String, qrCodeBytes: ByteArray) {
+    // --- ALTERAÇÃO 1: Adicionado parâmetro 'quantidade' ---
+    fun enviarBilhete(destinatario: String, nomeParticipante: String, qrCodeBytes: ByteArray, quantidade: Int) {
         try {
             val email = HtmlEmail()
             email.hostName = host
@@ -24,20 +25,17 @@ class EmailService {
             email.subject = "Confirmação de Presença - Gala Estrelas de Leiria 2025"
             email.addTo(destinatario)
 
-            // --- 1. CARREGAR LOGÓTIPO DOS RESOURCES ---
-            // Isto procura o arquivo "logo.png" dentro da pasta src/main/resources
-            val logoResourceUrl: URL? = this::class.java.classLoader.getResource("logo-estrelas.webp")
-
+            // Carregar logo dos resources
+            val logoResourceUrl: URL? = this::class.java.classLoader.getResource("logo.png")
             var logoCid = ""
-
             if (logoResourceUrl != null) {
-                // Anexa a imagem interna e gera o CID
                 logoCid = email.embed(logoResourceUrl, "Logo Estrelas")
-            } else {
-                println("⚠️ Aviso: logo.png não encontrado nos resources.")
             }
 
-            // --- 2. CORPO DO EMAIL ---
+            // Lógica para singular/plural
+            val textoPessoas = if (quantidade > 1) "PESSOAS" else "PESSOA"
+
+            // --- ALTERAÇÃO 2: HTML com a Quantidade ---
             val mensagemHtml = """
                 <!DOCTYPE html>
                 <html>
@@ -51,13 +49,13 @@ class EmailService {
                         .ticket-box { background-color: #252525; border: 1px dashed #DAA520; padding: 20px; margin: 20px 0; border-radius: 5px; }
                         .footer { background-color: #000000; padding: 20px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #333; }
                         .logo-img { max-width: 150px; height: auto; margin-bottom: 15px; }
+                        .qtd-badge { background-color: #DAA520; color: #000000; padding: 5px 12px; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; margin: 10px 0; }
                     </style>
                 </head>
                 <body>
                     <div class="container">
                         <div class="header">
                             ${if (logoCid.isNotEmpty()) "<img src='cid:$logoCid' alt='Estrelas de Leiria' class='logo-img'>" else ""}
-                            
                             <h1 class="gold-text" style="margin:0; letter-spacing: 2px; text-transform: uppercase; font-size: 22px;">Estrelas de Leiria</h1>
                             <p style="color: #888; margin: 5px 0 0 0; font-size: 14px;">GALA DE PREMIAÇÃO 2025</p>
                         </div>
@@ -67,13 +65,16 @@ class EmailService {
                             
                             <p style="line-height: 1.6; font-size: 16px;">
                                 É com enorme prazer que confirmamos a sua presença na nossa noite de celebração.
-                                A sua inscrição foi registada com sucesso.
+                                A sua inscrição para <strong>$quantidade bilhete${if (quantidade > 1) "s" else ""}</strong> foi registada com sucesso.
                             </p>
 
                             <div class="ticket-box">
                                 <p style="margin: 0; font-size: 14px; color: #aaa;">ESTE É O SEU ACESSO EXCLUSIVO</p>
-                                <h3 style="margin: 10px 0; color: #fff;">BILHETE DIGITAL</h3>
-                                <p style="font-size: 14px; line-height: 1.5;">
+                                <h3 style="margin: 10px 0 5px 0; color: #fff;">BILHETE DIGITAL</h3>
+                                
+                                <div class="qtd-badge">VÁLIDO PARA: $quantidade $textoPessoas</div>
+
+                                <p style="font-size: 14px; line-height: 1.5; margin-top: 15px;">
                                     Encontra em anexo o ficheiro contendo o seu <strong>QR Code</strong>.<br>
                                     Queira, por favor, apresentá-lo à entrada do evento para validação.
                                 </p>
@@ -100,13 +101,11 @@ class EmailService {
 
             email.setHtmlMsg(mensagemHtml)
 
-            // --- ANEXAR O QR CODE ---
             val dataSource = ByteArrayDataSource(qrCodeBytes, "image/png")
             email.attach(dataSource, "Bilhete_Estrelas_Leiria.png", "QR Code de Acesso")
 
-            // Envia
             email.send()
-            println("📧 E-mail enviado com sucesso para: $destinatario")
+            println("📧 E-mail enviado com sucesso para: $destinatario (Qtd: $quantidade)")
 
         } catch (e: Exception) {
             println("❌ Erro ao enviar e-mail: ${e.message}")
