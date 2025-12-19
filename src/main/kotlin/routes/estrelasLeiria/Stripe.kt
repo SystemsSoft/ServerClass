@@ -22,6 +22,7 @@ import org.koin.core.qualifier.named
 import org.koin.ktor.ext.inject
 import schemas.estrelasLeiria.Indicado
 import schemas.estrelasLeiria.IndicadoService
+import services.S3ApiClient // <--- IMPORTANTE: Importar o seu S3ApiClient
 import java.io.ByteArrayOutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -65,7 +66,7 @@ object PreInscricoesTable : Table("pre_inscricoes_v2") {
     val instagram = varchar("instagram", 100)
     val categoriaId = varchar("categoria_id", 500)
     val descricao = text("descricao")
-    val imageData = largeText("image_data")
+    val imageData = largeText("image_data") // Agora guardará a URL do S3
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
     val quantidade = integer("quantidade").default(1)
     val status = varchar("status", 20).default("AGUARDANDO")
@@ -78,7 +79,7 @@ object InscritosTable : Table("inscritos") {
     val instagram = varchar("instagram", 100)
     val categoriaId = varchar("categoria_id", 500)
     val descricao = text("descricao")
-    val imageData = largeText("image_data")
+    val imageData = largeText("image_data") // Agora guardará a URL do S3
     val stripeId = varchar("stripe_id", 100).nullable()
     val email = varchar("email", 200).nullable()
     val checkIn = bool("check_in").default(false)
@@ -116,14 +117,14 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
     }
 
     val stripeKey = System.getenv("STRIPE_API_KEY")
-    val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET")
+    // val webhookSecret = System.getenv("STRIPE_WEBHOOK_SECRET") // Removido daqui pois é lido dentro da rota
 
     if (stripeKey != null) Stripe.apiKey = stripeKey
 
     routing {
 
         // =====================================================================
-        // CHECK-IN ROUTE
+        // CHECK-IN ROUTE (Mantém-se igual, pois lê a URL do banco)
         // =====================================================================
         post("/admin/checkin") {
             val params = call.receive<Map<String, String>>()
@@ -164,7 +165,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                             nome = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
                             tipo = "CANDIDATO",
                             categoria = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
-                            foto = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData],
+                            foto = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData], // Retornará a URL
                             quantidade = qtdIndicado
                         )
                     }
@@ -197,7 +198,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                             nome = inscritoRow[InscritosTable.nome],
                             tipo = "ESPECTADOR",
                             categoria = "Bilhete Geral",
-                            foto = inscritoRow[InscritosTable.imageData],
+                            foto = inscritoRow[InscritosTable.imageData], // Retornará a URL
                             quantidade = qtd
                         )
                     }
@@ -276,19 +277,23 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
 
                                 val querVotar = row[PreInscricoesTable.desejaParticiparVotacao]
                                 val nomeParticipante = row[PreInscricoesTable.nome]
-                                val qtdFinal = quantidadeReal // Usa a quantidade da API
+                                val qtdFinal = quantidadeReal
+
+                                // AQUI: row[PreInscricoesTable.imageData] já contém a URL do S3
+                                // pois foi salva no endpoint POST /inscricoes
+                                val fotoUrlS3 = row[PreInscricoesTable.imageData]
 
                                 if (querVotar) {
                                     val novoIndicado = Indicado(
                                         categoriaId = row[PreInscricoesTable.categoriaId],
                                         nome = row[PreInscricoesTable.nome],
                                         instagram = row[PreInscricoesTable.instagram],
-                                        imageData = row[PreInscricoesTable.imageData],
+                                        imageData = fotoUrlS3, // Passa a URL
                                         descricaoDetalhada = row[PreInscricoesTable.descricao],
                                         desejaParticiparVotacao = true,
                                         stripeId = stripeSessionId,
                                         email = customerEmail,
-                                        quantidade = qtdFinal // Salva a quantidade correta
+                                        quantidade = qtdFinal
                                     )
                                     indicadoService.create(novoIndicado, UUID.randomUUID().toString())
 
@@ -299,11 +304,11 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                         it[instagram] = row[PreInscricoesTable.instagram]
                                         it[categoriaId] = row[PreInscricoesTable.categoriaId]
                                         it[descricao] = row[PreInscricoesTable.descricao]
-                                        it[imageData] = row[PreInscricoesTable.imageData]
+                                        it[imageData] = fotoUrlS3 // Passa a URL
                                         it[desejaParticiparVotacao] = false
                                         it[stripeId] = stripeSessionId
                                         it[email] = customerEmail
-                                        it[quantidade] = qtdFinal // Salva a quantidade correta
+                                        it[quantidade] = qtdFinal
                                     }
                                 }
 
@@ -329,28 +334,42 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             }
         }
 
-        // --- OUTRAS ROTAS ---
-
+        // =====================================================================
+        // POST /inscricoes (ALTERADO PARA UPLOAD S3)
+        // =====================================================================
         post("/inscricoes") {
             try {
                 val dto = call.receive<InscricaoDTO>()
+
+                // 1. Gera um ID para o arquivo
+                val fileId = UUID.randomUUID().toString()
+
+                // 2. Faz o Upload da imagem (Base64) para o S3
+                // O método detecta a extensão e retorna a URL pública
+                val s3Url = S3ApiClient.uploadImage(fileId, dto.imageData)
+
+                // 3. Salva no banco com a URL
                 val novoId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
                     PreInscricoesTable.insert {
                         it[nome] = dto.nome
                         it[instagram] = dto.instagram
                         it[categoriaId] = dto.categoriaId
                         it[descricao] = dto.descricaoDetalhada
-                        it[imageData] = dto.imageData
+                        it[imageData] = s3Url // <-- Salva a URL em vez do Base64
                         it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
-                        it[quantidade] = 1 // Default inicial (será atualizado pelo Webhook)
+                        it[quantidade] = 1
                         it[status] = "AGUARDANDO"
                     }[PreInscricoesTable.id]
                 }
                 call.respond(HttpStatusCode.Created, mapOf("id" to novoId))
             } catch (e: Exception) {
+                // Log para debug
+                e.printStackTrace()
                 call.respond(HttpStatusCode.BadRequest, "Erro: ${e.message}")
             }
         }
+
+        // --- OUTRAS ROTAS ---
 
         get("/inscricoes/{id}") {
             val idParam = call.parameters["id"]?.toIntOrNull()

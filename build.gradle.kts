@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.logback.classic)
     implementation(libs.ktor.server.config.yaml)
     implementation("com.stripe:stripe-java:28.1.0")
+    implementation("aws.sdk.kotlin:s3:1.0.0")
     implementation("com.google.zxing:core:3.5.2")
     implementation("com.google.zxing:javase:3.5.2")
     implementation("org.apache.commons:commons-email:1.5")
