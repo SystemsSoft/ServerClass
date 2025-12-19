@@ -132,7 +132,19 @@ class EmailService {
                                     </tr>
 
                                     <tr>
-                                        <td align="center" style="background-color: #000000; padding: 20px; font-size: 12px; color: #666666; border-top: 1px solid #333333;">
+                                        <td align="center" style="background-color: #000000; padding: 30px 20px 20px 20px; font-size: 12px; color: #666666; border-top: 1px solid #333333;">
+                                            
+                                            <div style="border-bottom: 1px solid #222222; padding-bottom: 20px; margin-bottom: 20px;">
+                                                <p style="color: #999999; font-weight: bold; font-size: 11px; margin-bottom: 8px; text-transform: uppercase;">
+                                                    ⚠️ Aviso Importante – Segurança
+                                                </p>
+                                                <p style="font-size: 10px; line-height: 1.5; color: #666666; margin: 0; text-align: justify;">
+                                                    A equipa do Estrelas de Leiria não entra em contacto a solicitar dados pessoais, códigos, palavras-passe, pagamentos adicionais ou qualquer outra informação sensível, seja por Instagram, e-mail, telefone, WhatsApp ou qualquer outro meio.<br><br>
+                                                    Toda a comunicação oficial ocorre exclusivamente através dos canais institucionais do Estrelas de Leiria e do e-mail utilizado no momento da aquisição do bilhete.
+                                                    Em caso de contacto suspeito, não responda, não partilhe informações e reporte imediatamente a situação.
+                                                </p>
+                                            </div>
+
                                             <p style="margin: 5px 0;">&copy; 2025 Estrelas de Leiria. Todos os direitos reservados.</p>
                                             <p style="margin: 5px 0;">
                                                 <a href="$siteUrl" target="_blank" style="color: #888888; text-decoration: none;">www.estrelasdeleiria.pt</a>
