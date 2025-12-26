@@ -42497,7 +42497,7 @@ A.axK(!1,new A.alf(this,a),s,t.z)},
 tv(a){return this.a5J(a)},
 a5J(a){var s=0,r=A.J(t.H),q=this,p
 var $async$tv=A.K(function(b,c){if(b===1)return A.G(c,r)
-while(true)switch(s){case 0:p=A.du("https://buy.stripe.com/test_eVqbJ3eAv7uZgcb4rTfQI02?client_reference_id="+a,0,null)
+while(true)switch(s){case 0:p=A.du("https://buy.stripe.com/6oU5kFfEUgfdfO62014ow01?client_reference_id="+a,0,null)
 s=5
 return A.O(A.aAB(p),$async$tv)
 case 5:s=c?2:4
@@ -42532,7 +42532,7 @@ else{s=A.W(217,B.i.m()>>>16&255,B.i.m()>>>8&255,B.i.m()&255)
 r=A.bp(20)
 q=A.eK(A.W(c,B.l.m()>>>16&255,B.l.m()>>>8&255,B.l.m()&255),1.5)
 c=A.b([new A.cP(2,B.bp,A.W(c,B.i.m()>>>16&255,B.i.m()>>>8&255,B.i.m()&255),B.h,10)],t.F)
-p=e.mg(B.Yr,0)
+p=e.mg(B.Yq,0)
 o=A.W(51,B.l.m()>>>16&255,B.l.m()>>>8&255,B.l.m()&255)
 n=e.z
 m=n==null
@@ -42564,7 +42564,7 @@ A.all.prototype={
 $0(){return this.a.y=!1},
 $S:0}
 A.alf.prototype={
-$1(a){var s=A.bp(15),r=t.p,q=A.bq(A.b([B.Yo,B.c7,B.nx,B.aC,B.Yd],r),B.v,B.q,B.bi),p=this.a
+$1(a){var s=A.bp(15),r=t.p,q=A.bq(A.b([B.Yn,B.c7,B.nx,B.aC,B.Yd],r),B.v,B.q,B.bi),p=this.a
 return A.a_L(A.b([A.qJ(B.Yc,new A.ald(p,this.b),null),A.qJ(B.B4,new A.ale(p,a),null)],r),B.bP,q,new A.bP(s,B.n1),B.Yf)},
 $S:79}
 A.ald.prototype={
@@ -43331,7 +43331,7 @@ s.l()
 this.aw()},
 K(a){var s,r,q,p,o=this,n=null
 if(!o.e){o.a.toString
-return A.bd(n,B.E5,B.n,n,n,new A.bF(B.nP,n,n,A.bp(16),n,n,B.Y),n,200,n,n,n,n,n)}s=o.d
+return A.bd(n,B.E6,B.n,n,n,new A.bF(B.nP,n,n,A.bp(16),n,n,B.Y),n,200,n,n,n,n,n)}s=o.d
 s===$&&A.a()
 r=s.a.gzU()
 o.a.toString
@@ -43500,12 +43500,12 @@ return A.M0(p,q,new A.avn(b),B.bZ,b,b)}},
 K(a){var s,r,q,p,o,n,m,l=this,k=null,j=A.b9(a,k,t.w).w.a,i=j.a<600,h=i?1/0:900
 if(l.ax)return A.dh(B.js,300,k)
 s=l.ch
-if(s!=null)return A.cq(A.bq(A.b([B.IJ,B.aC,A.be(s,k,k,k,B.bv,B.aD,k),B.c7,A.mh(!1,B.Yp,k,k,k,k,k,k,l.ga9J(),k,k)],t.p),B.v,B.bh,B.r),k,k)
+if(s!=null)return A.cq(A.bq(A.b([B.IJ,B.aC,A.be(s,k,k,k,B.bv,B.aD,k),B.c7,A.mh(!1,B.Yo,k,k,k,k,k,k,l.ga9J(),k,k)],t.p),B.v,B.bh,B.r),k,k)
 s=i?15:40
 r=l.a70(i)
 q=t.p
 p=A.b([new A.r4(l.a6P(i),200,k),B.c8,B.YH,B.aA],q)
-if(J.rz(l.as))p.push(B.E6)
+if(J.rz(l.as))p.push(B.E5)
 else{o=J.cH(l.as)
 n=J.az_(o,t.l7)
 for(m=0;m<o;++m)n[m]=new A.r4(l.a6D(a,J.ip(l.as,m),i),400+m*100,k)
@@ -43519,7 +43519,7 @@ a6P(a){var s=this,r=null,q=A.W(38,B.l.m()>>>16&255,B.l.m()>>>8&255,B.l.m()&255),
 return A.bd(r,A.bq(A.b([B.Qs,B.aA,m,B.aA,l,B.aA,k,B.c7,A.bd(r,A.cL(A.b([A.a16(B.c4,!1,B.f,r,r,!1,r,r,new A.avk(s),r,r,r,B.ji,r,!1,h),B.Y0],f),B.v,B.q,B.r,0),B.n,r,r,new A.bF(j,r,g,i,r,r,B.Y),r,r,r,B.ok,r,r,r)],f),B.ae,B.q,B.r),B.n,r,r,new A.bF(q,r,p,o,n,r,B.Y),r,r,r,B.bs,r,r,r)},
 a6D(a,b,c){var s,r,q,p,o=null,n=this.d.h(0,b.b)!=null,m=n?A.W(20,B.l.m()>>>16&255,B.l.m()>>>8&255,B.l.m()&255):A.W(8,B.f.m()>>>16&255,B.f.m()>>>8&255,B.f.m()&255),l=A.bp(15),k=n?B.K:B.nS,j=c?12:20,i=n?B.K:B.f
 i=A.be(b.a,o,o,o,A.c4(o,o,i,o,o,o,o,o,o,o,o,c?18:22,o,o,B.V,o,o,!0,o,1,o,o,o,o,o,o),o,o)
-s=n?B.Yt:B.YI
+s=n?B.Ys:B.YI
 r=A.b([],t.p)
 q=b.c
 if(q.length===0)r.push(B.OX)
@@ -43810,14 +43810,14 @@ if(a)return new A.bc(B.Hu,A.bq(A.b([n,B.fw,m],o),B.v,B.q,B.r),k)
 else return A.cq(A.bd(k,A.cL(A.b([A.eO(n,2),B.Sm,A.dh(m,k,350)],o),B.ae,B.q,B.r,0),B.n,k,B.jj,k,k,k,k,B.Hh,k,k,k),k,k)},
 K(a){var s=null,r=A.b9(a,s,t.w).w.a.a<800,q=r?this.a6T():s
 return A.nd(s,B.p,new A.dX(new A.apQ(this,r),s),q)},
-a6T(){var s,r,q,p=this,o=null,n=A.cq(A.kP(u.A,B.D,new A.apq(),B.aH,B.jl,o,100,o,o),o,o),m=A.mG(!1,o,o,o,!0,o,!0,o,B.Ir,o,o,new A.apr(p),!1,o,o,o,o,o,B.Yq,o,o,o),l=p.c
+a6T(){var s,r,q,p=this,o=null,n=A.cq(A.kP(u.A,B.D,new A.apq(),B.aH,B.jl,o,100,o,o),o,o),m=A.mG(!1,o,o,o,!0,o,!0,o,B.Ir,o,o,new A.apr(p),!1,o,o,o,o,o,B.Yp,o,o,o),l=p.c
 l.toString
 l=A.V(l).VC(B.p)
 s=t.p
-r=A.ayI(A.b([A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.aps(p),!1,o,o,o,o,o,B.Y1,o,o,o),A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apt(p),!1,o,o,o,o,o,B.Yy,o,o,o),A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apu(p),!1,o,o,o,o,o,B.YE,o,o,o),A.mG(!1,o,o,o,!0,o,!0,o,B.ID,o,o,new A.apv(p),!1,o,o,o,o,o,B.Yu,o,o,o)],s),o,B.l,B.K,!1,B.IB,o,o,B.Y3)
+r=A.ayI(A.b([A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.aps(p),!1,o,o,o,o,o,B.Y1,o,o,o),A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apt(p),!1,o,o,o,o,o,B.Yy,o,o,o),A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apu(p),!1,o,o,o,o,o,B.YE,o,o,o),A.mG(!1,o,o,o,!0,o,!0,o,B.ID,o,o,new A.apv(p),!1,o,o,o,o,o,B.Yt,o,o,o)],s),o,B.l,B.K,!1,B.IB,o,o,B.Y3)
 q=p.c
 q.toString
-s=A.b([new A.KZ(B.CF,n,o),m,new A.nw(l,r,o),B.Gz,new A.nw(A.V(q).VC(B.p),A.ayI(A.b([A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apw(p),!1,o,o,o,o,o,B.YG,o,o,o),A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apx(p),!1,o,o,o,o,o,B.Ys,o,o,o)],s),o,B.f,B.f,!1,B.Ip,o,o,B.Y4),o),new A.bc(B.bs,A.mh(!1,B.Ya,o,o,o,o,o,o,new A.apy(p),o,A.kB(o,o,B.K,o,o,o,o,o,o,B.i,o,o,B.eP,o,o,o,o,o,o,o)),o),new A.bc(B.bs,A.mh(!1,B.Yw,o,o,o,o,o,o,new A.apz(p),o,A.kB(o,o,B.K,o,o,o,o,o,o,B.i,o,o,B.eP,o,o,o,o,o,o,o)),o)],s)
+s=A.b([new A.KZ(B.CF,n,o),m,new A.nw(l,r,o),B.Gz,new A.nw(A.V(q).VC(B.p),A.ayI(A.b([A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apw(p),!1,o,o,o,o,o,B.YG,o,o,o),A.mG(!1,B.eQ,o,o,!0,o,!0,o,o,o,o,new A.apx(p),!1,o,o,o,o,o,B.Yr,o,o,o)],s),o,B.f,B.f,!1,B.Ip,o,o,B.Y4),o),new A.bc(B.bs,A.mh(!1,B.Ya,o,o,o,o,o,o,new A.apy(p),o,A.kB(o,o,B.K,o,o,o,o,o,o,B.i,o,o,B.eP,o,o,o,o,o,o,o)),o),new A.bc(B.bs,A.mh(!1,B.Yw,o,o,o,o,o,o,new A.apz(p),o,A.kB(o,o,B.K,o,o,o,o,o,o,B.i,o,o,B.eP,o,o,o,o,o,o,o)),o)],s)
 q=A.ap([null,0],t.LO,t.S)
 return new A.KV(B.bP,new A.A1(new A.ahu(!0,!0,!0,s,q),B.az,B.ag,!1,o,o,B.j9,o,!1,o,0,o,7,B.iC,B.Q,o,o,B.G,B.at,o),o)},
 a6G(){var s,r,q=null,p=this.d,o=p===1||p===2||p===3
@@ -95415,14 +95415,14 @@ B.FS=new A.oF(B.ag,B.bh,B.r,B.v,null,B.bI,null,0,B.JQ,null)
 B.E4=new A.fF(B.D,null,null,B.FS,null)
 B.nx=new A.oy(null,null,null,B.K,null,null,null,null)
 B.js=new A.fF(B.D,null,null,B.nx,null)
-B.St=new A.cF(null,null,null,null)
-B.E5=new A.fF(B.D,null,null,B.St,null)
 B.Ha=new A.a4(0,40,0,0)
 B.S=new A.r(0.7019607843137254,1,1,1,B.e)
 B.Ts=new A.j(!0,B.S,null,null,null,null,16,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.Yn=new A.b7("Nenhuma categoria com indicados encontrada.",null,B.Ts,null,null,null,null,null,null)
-B.OY=new A.bc(B.Ha,B.Yn,null)
-B.E6=new A.fF(B.D,null,null,B.OY,null)
+B.Yu=new A.b7("In\xedcio das vota\xe7\xf5es em breve,Aguardem!",null,B.Ts,null,null,null,null,null,null)
+B.OY=new A.bc(B.Ha,B.Yu,null)
+B.E5=new A.fF(B.D,null,null,B.OY,null)
+B.St=new A.cF(null,null,null,null)
+B.E6=new A.fF(B.D,null,null,B.St,null)
 B.E7=new A.rY(null,null,null,null,null,null,null,null,null)
 B.E8=new A.xO(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.nw=new A.dC(0,B.o)
@@ -98045,22 +98045,22 @@ B.Yj=new A.b7("REGULAMENTO OFICIAL",null,B.Vs,null,null,null,null,null,null)
 B.Yk=new A.b7("Preencha para participar da Vota\xe7\xe3o",null,B.mb,B.aD,null,null,null,null,null)
 B.Yl=new A.b7("Cancelar",null,B.mc,null,null,null,null,null,null)
 B.Ym=new A.b7("Confirmar",null,B.eh,null,null,null,null,null,null)
-B.Yo=new A.b7("Dados registados! Para concluir a aquisi\xe7\xe3o do bilhete, ser\xe1 redirecionado para a plataforma de pagamento.",null,B.dv,B.aD,null,null,null,null,null)
+B.Yn=new A.b7("Dados registados! Para concluir a aquisi\xe7\xe3o do bilhete, ser\xe1 redirecionado para a plataforma de pagamento.",null,B.dv,B.aD,null,null,null,null,null)
 B.WH=new A.j(!0,B.K,null,null,null,null,12,B.kI,B.hz,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.B8=new A.b7("Proteja os seus dados e participe com seguran\xe7a.",null,B.WH,null,null,null,null,null,null)
 B.Xh=new A.j(!0,B.S,null,null,null,null,12,null,null,null,null,null,1.4,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.B9=new A.b7("A equipa do Estrelas de Leiria n\xe3o entra em contacto a solicitar dados pessoais, c\xf3digos, palavras-passe, pagamentos adicionais ou qualquer outra informa\xe7\xe3o sens\xedvel, seja por Instagram, e-mail, telefone, WhatsApp ou qualquer outro meio.\n\nToda a comunica\xe7\xe3o oficial ocorre exclusivamente atrav\xe9s dos canais institucionais do Estrelas de Leiria e do e-mail utilizado no momento da aquisi\xe7\xe3o do bilhete.\nEm caso de contacto suspeito, n\xe3o responda, n\xe3o partilhe informa\xe7\xf5es e reporte imediatamente a situa\xe7\xe3o.",null,B.Xh,B.cz,null,null,null,null,null)
 B.UX=new A.j(!0,null,null,null,null,null,16,B.V,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.Ba=new A.b7("In\xedcio das inscri\xe7\xf5es em breve",null,B.UX,null,null,null,null,null,null)
-B.Yp=new A.b7("Tentar Novamente",null,null,null,null,null,null,null,null)
+B.Yo=new A.b7("Tentar Novamente",null,null,null,null,null,null,null,null)
 B.Ut=new A.j(!0,B.l,null,"Montserrat",null,null,20,B.V,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.Bb=new A.b7("O pagamento garante a sua participa\xe7\xe3o oficial e inclui:",null,B.Ut,null,null,null,null,null,null)
-B.Yq=new A.b7("IN\xcdCIO",null,B.eh,null,null,null,null,null,null)
-B.Yr=new A.b7("Preencha para receber o bilhete",null,B.mb,B.aD,null,null,null,null,null)
-B.Ys=new A.b7("Adquirir Bilhetes",null,B.dv,null,null,null,null,null,null)
+B.Yp=new A.b7("IN\xcdCIO",null,B.eh,null,null,null,null,null,null)
+B.Yq=new A.b7("Preencha para receber o bilhete",null,B.mb,B.aD,null,null,null,null,null)
+B.Yr=new A.b7("Adquirir Bilhetes",null,B.dv,null,null,null,null,null,null)
 B.Vj=new A.j(!0,B.hX,null,null,null,null,13,B.V,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.Yt=new A.b7("Voto Registrado \u2705",null,B.Vj,null,null,null,null,null,null)
-B.Yu=new A.b7("Regulamento",null,B.eh,null,null,null,null,null,null)
+B.Ys=new A.b7("Voto Registrado \u2705",null,B.Vj,null,null,null,null,null,null)
+B.Yt=new A.b7("Regulamento",null,B.eh,null,null,null,null,null,null)
 B.Yw=new A.b7("DESTAQUES 2025",null,B.eg,null,null,null,null,null,null)
 B.Yy=new A.b7("Superj\xfari",null,B.dv,null,null,null,null,null,null)
 B.UH=new A.j(!0,B.K,null,null,null,null,12,B.V,null,1,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
