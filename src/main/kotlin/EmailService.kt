@@ -6,34 +6,44 @@ import java.net.URL
 
 class EmailService {
 
-    // Configurações SMTP (Variáveis de Ambiente)
+    // =========================================================================
+    // CONFIGURAÇÕES (Variáveis de Ambiente)
+    // =========================================================================
     private val host = System.getenv("SMTP_HOST") ?: "smtp.gmail.com"
     private val port = System.getenv("SMTP_PORT")?.toInt() ?: 587
     private val username = System.getenv("SMTP_USER") ?: "contato@estrelasdeleiria.pt"
+    // Dica: Se usar Gmail, lembre-se de usar a "Senha de App" e não a sua senha normal
     private val password = System.getenv("SMTP_PASS") ?: "rgcz dusq pfxz nxos"
 
     // Links Oficiais
     private val siteUrl = "https://www.estrelasdeleiria.pt"
 
+    // Link de Busca do Google Maps apontando para o local do evento
+    private val mapsUrl = "https://www.google.com/maps/search/?api=1&query=Auditório+da+Igreja+dos+Pastorinhos+Gândara+dos+Olivais+Leiria"
+
+    /**
+     * Envia o bilhete digital com QR Code e detalhes do evento.
+     */
     fun enviarBilhete(destinatario: String, nomeParticipante: String, qrCodeBytes: ByteArray, quantidade: Int) {
         try {
-            // 1. Configuração do Servidor de E-mail
+            // 1. Configuração do E-mail
             val email = HtmlEmail()
             email.hostName = host
             email.setSmtpPort(port)
             email.setAuthentication(username, password)
             email.isStartTLSEnabled = true
-            email.setCharset("UTF-8") // Importante para acentos
+            email.setCharset("UTF-8")
 
             email.setFrom(username, "Gala Estrelas de Leiria")
-            email.subject = "O Seu Bilhete - Gala Estrelas de Leiria 2025"
+            email.subject = "O Seu Bilhete - Gala Estrelas de Leiria 2026"
             email.addTo(destinatario)
 
-            // 2. Tratamento de Imagens (CID - Content ID)
+            // 2. Processamento de Imagens (CID)
 
-            // A. Logótipo (Vem dos Resources)
-            var logoHtml = "<h1 style='color:#DAA520; margin:0;'>ESTRELAS DE LEIRIA</h1>" // Fallback texto
+            // A. Logótipo (Tenta carregar dos resources, senão usa texto)
+            var logoHtml = "<h1 style='color:#DAA520; margin:0;'>ESTRELAS DE LEIRIA</h1>"
             try {
+                // Certifique-se que o arquivo 'logo-estrelas.webp' está na pasta src/main/resources
                 val logoUrl: URL? = this::class.java.classLoader.getResource("logo-estrelas.webp")
                 if (logoUrl != null) {
                     val logoCid = email.embed(logoUrl, "Logo Estrelas")
@@ -82,7 +92,7 @@ class EmailService {
                                     <tr>
                                         <td align="center" style="padding: 40px 20px; background-color: #000000; border-bottom: 2px solid #DAA520;">
                                             $logoHtml
-                                            <p style="color: #888888; margin: 5px 0 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Gala de Premiação 2025</p>
+                                            <p style="color: #888888; margin: 5px 0 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Gala de Premiação 2026</p>
                                         </td>
                                     </tr>
 
@@ -115,9 +125,35 @@ class EmailService {
                                                     </td>
                                                 </tr>
                                             </table>
+                                            
+                                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #222222; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #DAA520;">
+                                                <tr>
+                                                    <td style="padding: 20px;">
+                                                        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                                            <tr>
+                                                                <td style="padding-bottom: 15px; border-bottom: 1px solid #333333;">
+                                                                    <p style="color: #DAA520; font-size: 11px; font-weight: bold; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px;">DATA DO EVENTO</p>
+                                                                    <p style="color: #ffffff; font-size: 16px; margin: 0;">📅 <strong>07 de Fevereiro de 2026</strong></p>
+                                                                </td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td style="padding-top: 15px;">
+                                                                    <p style="color: #DAA520; font-size: 11px; font-weight: bold; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px;">LOCALIZAÇÃO</p>
+                                                                    <p style="color: #ffffff; font-size: 16px; margin: 0 0 4px 0;">📍 <strong>Auditório da Igreja dos Pastorinhos</strong></p>
+                                                                    <p style="color: #aaaaaa; font-size: 14px; margin: 0 0 15px 0;">Gândara dos Olivais – Leiria</p>
+                                                                    
+                                                                    <a href="$mapsUrl" target="_blank" style="display: inline-block; color: #DAA520; font-size: 12px; font-weight: bold; text-decoration: none; border: 1px solid #DAA520; padding: 8px 15px; border-radius: 4px;">
+                                                                        🗺️ VER NO GOOGLE MAPS
+                                                                    </a>
+                                                                </td>
+                                                            </tr>
+                                                        </table>
+                                                    </td>
+                                                </tr>
+                                            </table>
 
                                             <p style="font-size: 14px; color: #888888; margin-top: 20px;">
-                                                Para mais informações sobre o programa, local e regulamento, visite o nosso site.
+                                                Para mais informações sobre o programa e regulamento, visite o nosso site.
                                             </p>
                                             
                                             <a href="$siteUrl" target="_blank" style="background-color: #DAA520; color: #000000; padding: 12px 30px; text-decoration: none; font-weight: bold; border-radius: 4px; display: inline-block; margin-top: 10px; font-size: 14px;">

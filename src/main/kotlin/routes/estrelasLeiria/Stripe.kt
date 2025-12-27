@@ -363,7 +363,6 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                 }
                 call.respond(HttpStatusCode.Created, mapOf("id" to novoId))
             } catch (e: Exception) {
-                // Log para debug
                 e.printStackTrace()
                 call.respond(HttpStatusCode.BadRequest, "Erro: ${e.message}")
             }
