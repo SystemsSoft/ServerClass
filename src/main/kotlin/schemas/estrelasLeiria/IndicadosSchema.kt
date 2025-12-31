@@ -47,7 +47,17 @@ data class IndicadoUpdate(
     val descricaoDetalhada: String,
     val desejaParticiparVotacao: Boolean
 )
-
+@Serializable
+data class BilheteManualDTO(
+    val nome: String,
+    val email: String,
+    val instagram: String = "",
+    val categoriaId: String = "Bilhete Geral",
+    val descricao: String = "Venda Manual",
+    val desejaParticiparVotacao: Boolean = false,
+    val quantidade: Int = 1,
+    val fotoUrl: String = ""
+)
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
 class IndicadoService(private val database: Database) {
 

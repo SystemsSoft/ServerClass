@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerar Bilhete Manual</title>
+    <style>
+        :root {
+            --gold: #DAA520;
+            --dark: #1A1A1A;
+            --black: #000000;
+            --white: #FFFFFF;
+            --gray: #333333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--black);
+            color: var(--white);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--dark);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(218, 165, 32, 0.2);
+            border: 1px solid rgba(218, 165, 32, 0.3);
+            width: 100%;
+            max-width: 500px;
+            /* Esconde o painel principal inicialmente */
+            display: none;
+        }
+
+        /* Estilos do LOGIN */
+        #loginContainer {
+            background-color: var(--dark);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(218, 165, 32, 0.2);
+            border: 1px solid rgba(218, 165, 32, 0.3);
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--gold);
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #ccc;
+            font-size: 0.9em;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"], /* Adicionado para senha */
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--black);
+            border: 1px solid var(--gray);
+            color: var(--white);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--gold);
+            outline: none;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            background-color: rgba(218, 165, 32, 0.1);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(218, 165, 32, 0.2);
+        }
+
+        .checkbox-group input {
+            margin-right: 10px;
+            width: 20px;
+            height: 20px;
+            accent-color: var(--gold);
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            color: var(--gold);
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: var(--gold);
+            color: var(--black);
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #c59318;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background-color: var(--gray);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #statusMessage {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            display: none;
+        }
+
+        #loginError {
+            color: #dc3545;
+            margin-top: 15px;
+            font-size: 0.9em;
+            display: none;
+        }
+
+        .success {
+            background-color: rgba(40, 167, 69, 0.2);
+            color: #28a745;
+            border: 1px solid #28a745;
+        }
+
+        .error {
+            background-color: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+            border: 1px solid #dc3545;
+        }
+
+        .loading {
+            color: var(--gold);
+            text-align: center;
+            display: none;
+            margin-top: 10px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="loginContainer">
+    <h1>Acesso Restrito</h1>
+    <div class="form-group">
+        <label for="loginUser">Utilizador</label>
+        <input type="text" id="loginUser">
+    </div>
+    <div class="form-group">
+        <label for="loginPass">Senha</label>
+        <input type="password" id="loginPass">
+    </div>
+    <button onclick="verificarLogin()">ENTRAR</button>
+    <div id="loginError">Acesso Negado</div>
+</div>
+
+<div class="container" id="mainContainer">
+    <h1>Emitir Bilhete</h1>
+    <form id="ticketForm">
+
+        <div class="form-group">
+            <label for="nome">Nome do Participante *</label>
+            <input type="text" id="nome" required placeholder="Ex: João Silva">
+        </div>
+
+        <div class="form-group">
+            <label for="email">E-mail para Envio *</label>
+            <input type="email" id="email" required placeholder="Ex: joao@email.com">
+        </div>
+
+        <div class="form-group">
+            <label for="instagram">Instagram</label>
+            <input type="text" id="instagram" placeholder="Ex: @joaosilva">
+        </div>
+
+        <div class="form-group">
+            <label for="quantidade">Quantidade de Bilhetes</label>
+            <input type="number" id="quantidade" value="1" min="1" required>
+        </div>
+
+        <div class="form-group">
+            <label for="categoria">Categoria / Tipo</label>
+            <select id="categoria">
+                <option value="" disabled selected>A carregar categorias...</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="descricao">Nota Interna (Descrição)</label>
+            <input type="text" id="descricao" value="Pagamento Manual" placeholder="Ex: Pago em dinheiro">
+        </div>
+
+        <div class="form-group checkbox-group">
+            <input type="checkbox" id="votacao">
+            <label for="votacao">Participa da Votação? (É Candidato)</label>
+        </div>
+
+        <div class="form-group">
+            <label for="fotoUrl">URL da Foto (Opcional - Apenas Candidatos)</label>
+            <input type="text" id="fotoUrl" placeholder="https://...">
+        </div>
+
+        <button type="submit" id="submitBtn">GERAR E ENVIAR</button>
+
+        <div class="loading" id="loadingIndicator">
+            A processar e a enviar e-mail... aguarde.
+        </div>
+
+        <div id="statusMessage"></div>
+    </form>
+</div>
+
+<script>
+    // =======================================================
+    // 1. LÓGICA DE LOGIN SIMPLES
+    // =======================================================
+    function verificarLogin() {
+        const u = document.getElementById('loginUser').value;
+        const p = document.getElementById('loginPass').value;
+        const err = document.getElementById('loginError');
+
+        if (u === 'estrelas' && p === 'estrelasq1w2e3r4') {
+            // Sucesso: Esconde login, mostra painel
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+
+            // Carrega as categorias apenas após logar
+            carregarCategorias();
+        } else {
+            // Erro
+            err.style.display = 'block';
+        }
+    }
+
+    // =======================================================
+    // 2. CONFIGURAÇÃO DA API E LÓGICA DO FORMULÁRIO
+    // =======================================================
+    const API_URL = "/admin/criar-bilhete-manual";
+    const CATEGORIAS_URL = "/categorias";
+
+    // Função para carregar categorias (Só é chamada após login)
+    async function carregarCategorias() {
+        const select = document.getElementById('categoria');
+        try {
+            const response = await fetch(CATEGORIAS_URL);
+            if (!response.ok) throw new Error("Erro ao buscar categorias");
+            const categorias = await response.json();
+            select.innerHTML = '';
+
+            // Opção Padrão
+            const optionGeral = document.createElement('option');
+            optionGeral.value = "Bilhete Geral";
+            optionGeral.text = "Bilhete Geral (Espectador)";
+            select.appendChild(optionGeral);
+
+            categorias.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.nome || cat.id;
+                option.text = cat.nome;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error(error);
+            select.innerHTML = '<option value="Bilhete Geral">Bilhete Geral (Erro ao carregar lista)</option>';
+        }
+    }
+
+    // Envio do Formulário
+    document.getElementById('ticketForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const btn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loadingIndicator');
+        const statusDiv = document.getElementById('statusMessage');
+
+        btn.disabled = true;
+        btn.innerText = "A PROCESSAR...";
+        loading.style.display = 'block';
+        statusDiv.style.display = 'none';
+        statusDiv.className = '';
+
+        const payload = {
+            nome: document.getElementById('nome').value,
+            email: document.getElementById('email').value,
+            instagram: document.getElementById('instagram').value,
+            categoriaId: document.getElementById('categoria').value,
+            descricao: document.getElementById('descricao').value,
+            quantidade: parseInt(document.getElementById('quantidade').value),
+            desejaParticiparVotacao: document.getElementById('votacao').checked,
+            fotoUrl: document.getElementById('fotoUrl').value
+        };
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                statusDiv.innerText = `SUCESSO! Bilhete criado. Código: ${result.codigo}`;
+                statusDiv.className = 'success';
+                statusDiv.style.display = 'block';
+
+                document.getElementById('nome').value = '';
+                document.getElementById('email').value = '';
+                document.getElementById('instagram').value = '';
+            } else {
+                throw new Error(result.message || 'Erro desconhecido no servidor.');
+            }
+
+        } catch (error) {
+            console.error(error);
+            statusDiv.innerText = "ERRO: " + error.message;
+            statusDiv.className = 'error';
+            statusDiv.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "GERAR E ENVIAR";
+            loading.style.display = 'none';
+        }
+    });
+</script>
+
+</body>
+</html>
