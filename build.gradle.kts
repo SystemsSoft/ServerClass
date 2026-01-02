@@ -49,6 +49,7 @@ dependencies {
     implementation("com.google.zxing:core:3.5.2")
     implementation("com.google.zxing:javase:3.5.2")
     implementation("org.apache.commons:commons-email:1.5")
+    implementation("com.github.librepdf:openpdf:1.3.30")
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
 }

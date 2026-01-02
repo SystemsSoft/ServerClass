@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estrelas de Leiria - Bilhete Cortesia</title>
+    <style>
+        :root {
+            --gold: #DAA520;
+            --dark: #1A1A1A;
+            --black: #000000;
+            --white: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--black);
+            color: var(--white);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--dark);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(218, 165, 32, 0.2);
+            border: 1px solid rgba(218, 165, 32, 0.3);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        /* ESTILO DA LOGO */
+        .logo {
+            max-width: 180px;
+            display: block;
+            margin: 0 auto 15px auto;
+            height: auto;
+        }
+
+        h1 {
+            color: var(--gold);
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            margin-top: 0;
+        }
+
+        p {
+            color: #ccc;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--gold);
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--black);
+            border: 1px solid #333;
+            color: var(--white);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            border-color: var(--gold);
+            outline: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: var(--gold);
+            color: var(--black);
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #c59318;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background-color: #333;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #statusMessage {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+
+        .error {
+            background-color: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+            border: 1px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <img src="https://repo-estrelas-leiria.s3.us-east-1.amazonaws.com/logo.png" alt="Estrelas de Leiria" class="logo">
+
+    <h1>Bilhete Cortesia</h1>
+    <p>Insira o nome para gerar e baixar o bilhete.</p>
+
+    <form id="cortesiaForm">
+        <div class="form-group">
+            <label for="nome">Nome Completo</label>
+            <input type="text" id="nome" required placeholder="Nome do convidado">
+        </div>
+
+        <button type="submit" id="submitBtn">BAIXAR BILHETE (PDF)</button>
+
+        <div id="statusMessage"></div>
+    </form>
+</div>
+
+<script>
+    const API_URL = "/cortesia/baixar";
+
+    document.getElementById('cortesiaForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const btn = document.getElementById('submitBtn');
+        const statusDiv = document.getElementById('statusMessage');
+        const nomeInput = document.getElementById('nome');
+
+        // Resetar UI
+        btn.disabled = true;
+        btn.innerText = "A GERAR PDF...";
+        statusDiv.style.display = 'none';
+        statusDiv.className = '';
+
+        const payload = {
+            nome: nomeInput.value,
+            quantidade: 1
+        };
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                // Se deu certo, inicia o download do BLOB
+                const blob = await response.blob();
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                // Formata o nome do arquivo
+                a.download = `Bilhete_${payload.nome.replace(/\s+/g, '_')}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+
+                // Limpeza
+                a.remove();
+                window.URL.revokeObjectURL(url);
+
+                btn.innerText = "SUCESSO! A TRANSFERIR...";
+
+                // Reset após 2 segundos
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = "BAIXAR BILHETE (PDF)";
+                    nomeInput.value = '';
+                }, 2000);
+
+            } else {
+                // Se deu erro (ex: limite esgotado), lemos a mensagem JSON
+                const result = await response.json();
+                throw new Error(result.message || 'Não foi possível gerar o bilhete.');
+            }
+
+        } catch (error) {
+            console.error(error);
+            // Mostra a mensagem limpa (sem "ERRO:")
+            statusDiv.innerText = error.message;
+            statusDiv.className = 'error';
+            statusDiv.style.display = 'block';
+
+            btn.disabled = false;
+            btn.innerText = "BAIXAR BILHETE (PDF)";
+        }
+    });
+</script>
+
+</body>
+</html>

@@ -46,6 +46,7 @@ import schemas.mec.VehicleService
 import kotlin.getValue
 import org.koin.core.qualifier.named
 import routes.estrelasLeiria.adminTicketRouting
+import routes.estrelasLeiria.cortesiaRouting
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
@@ -126,6 +127,8 @@ private fun Application.configureRoutingEstrelasLeiria() {
     indicadoRouting(indicados)
     votoRouting(votos)
     stripeRouting(indicados)
+    cortesiaRouting(database = databaseEstrelas)
+
     adminTicketRouting(
         indicadoService = indicados,
         database = databaseEstrelas,
