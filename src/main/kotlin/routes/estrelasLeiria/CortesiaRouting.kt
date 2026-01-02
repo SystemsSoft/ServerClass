@@ -60,7 +60,7 @@ fun Application.cortesiaRouting(database: Database) {
                     InscritosTable.update({ InscritosTable.stripeId eq request.code }) {
                         it[nome] = request.nome
                         it[email] = request.email
-                        // it[checkIn] = true // Opcional: Marcar check-in automático ou criar coluna 'confirmado'
+                        it[confirmado] = true
                     }
                 }
 
@@ -110,6 +110,7 @@ fun Application.cortesiaRouting(database: Database) {
                         it[imageData] = ""
                         it[desejaParticiparVotacao] = false
                         it[instagram] = ""
+                        it[confirmado] = false
                     }
                 }
 
