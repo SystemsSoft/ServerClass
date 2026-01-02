@@ -42,7 +42,7 @@ data class ConfirmacaoDTO(
 // ============================================================================
 fun Application.cortesiaRouting(database: Database) {
 
-    val LIMITE_MAXIMO_CORTESIAS = 25
+    val LIMITE_MAXIMO_CORTESIAS = 50
     // URL base para onde o QR Code vai apontar
     val BASE_URL_CONFIRMACAO = "https://estrelasdeleiria.pt/painel/confirmar.html"
 
