@@ -87,6 +87,7 @@ object InscritosTable : Table("inscritos") {
     val checkInDate = varchar("check_in_date", 50).nullable()
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
     val quantidade = integer("quantidade").default(1)
+    val telefone = varchar("telefone", 50).default("")
     val confirmado = bool("confirmado").default(false)
     override val primaryKey = PrimaryKey(id)
 }

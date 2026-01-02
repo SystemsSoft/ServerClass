@@ -12,8 +12,8 @@
         input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #444; background: #000; color: #fff; box-sizing: border-box; }
         button { width: 100%; padding: 15px; background-color: #DAA520; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; color: #000; }
         button:disabled { background-color: #555; cursor: not-allowed; }
-        .error-msg { color: #dc3545; text-align: center; margin-top: 15px; font-weight: bold; display: none; }
         .success-msg { color: #28a745; text-align: center; margin-top: 15px; font-weight: bold; display: none; }
+        .error-msg { color: #dc3545; text-align: center; margin-top: 15px; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
@@ -26,49 +26,45 @@
     <div id="content">
         <h1>Confirme sua Presença</h1>
         <p style="color:#ccc; font-size:0.9em; text-align: center; margin-bottom: 25px;">
-            Preencha os seus dados para validar o bilhete.
+            Complete seus dados para validar o bilhete.
         </p>
 
         <form id="confirmForm">
             <label for="inputNome">Nome Completo</label>
             <input type="text" id="inputNome" placeholder="Seu nome" required>
 
-            <label for="inputEmail">E-mail de Contacto</label>
+            <label for="inputEmail">E-mail</label>
             <input type="email" id="inputEmail" placeholder="exemplo@email.com" required>
+
+            <label for="inputTelefone">Telefone / Telemóvel</label>
+            <input type="tel" id="inputTelefone" placeholder="+351 912 345 678" required>
 
             <button type="submit" id="btnConfirmar">CONFIRMAR E ENVIAR</button>
         </form>
 
-        <div id="msgError" class="error-msg"></div>
         <div id="msgSuccess" class="success-msg"></div>
+        <div id="msgError" class="error-msg"></div>
     </div>
 </div>
 
 <script>
-    // 1. Pega apenas o código da URL. Não faz fetch de dados.
     const params = new URLSearchParams(window.location.search);
     const ticketCode = params.get('ticket');
 
-    // Validação básica se o código existe na URL
+    // Validação inicial
     if(!ticketCode) {
         document.getElementById('confirmForm').style.display = 'none';
         document.getElementById('msgError').style.display = 'block';
-        document.getElementById('msgError').innerText = "Erro: Link inválido ou sem código de bilhete.";
+        document.getElementById('msgError').innerText = "Link inválido.";
     }
 
-    // 2. Envia os dados digitados pelo usuário
     document.getElementById('confirmForm').addEventListener('submit', async function(e) {
         e.preventDefault();
 
         const btn = document.getElementById('btnConfirmar');
         const nomeVal = document.getElementById('inputNome').value;
         const emailVal = document.getElementById('inputEmail').value;
-        const msgError = document.getElementById('msgError');
-        const msgSuccess = document.getElementById('msgSuccess');
-
-        // Limpa mensagens anteriores
-        msgError.style.display = 'none';
-        msgSuccess.style.display = 'none';
+        const telVal = document.getElementById('inputTelefone').value; // Pega o telefone
 
         btn.disabled = true;
         btn.innerText = "A ENVIAR...";
@@ -80,24 +76,22 @@
                 body: JSON.stringify({
                     code: ticketCode,
                     nome: nomeVal,
-                    email: emailVal
+                    email: emailVal,
+                    telefone: telVal // Envia o telefone
                 })
             });
 
             if(res.ok) {
                 document.getElementById('confirmForm').style.display = 'none';
-                msgSuccess.style.display = 'block';
-                msgSuccess.innerText = "✅ Obrigado! A sua presença foi confirmada com sucesso.";
+                document.getElementById('msgSuccess').style.display = 'block';
+                document.getElementById('msgSuccess').innerText = "✅ Presença Confirmada! Os dados foram salvos.";
             } else {
-                // Tenta ler mensagem de erro do backend se existir
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.message || "Erro ao confirmar.");
+                throw new Error();
             }
         } catch(e) {
-            msgError.style.display = 'block';
-            msgError.innerText = "❌ Falha: Bilhete não encontrado ou erro de conexão.";
+            document.getElementById('msgError').style.display = 'block';
+            document.getElementById('msgError').innerText = "❌ Erro ao salvar. Tente novamente.";
             btn.innerText = "TENTAR NOVAMENTE";
-            btn.style.backgroundColor = "#dc3545";
             btn.disabled = false;
         }
     });

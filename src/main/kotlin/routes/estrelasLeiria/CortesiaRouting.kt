@@ -33,7 +33,8 @@ data class CortesiaDTO(
 data class ConfirmacaoDTO(
     val code: String,  // O código CORTESIA_XXXX que estava na URL
     val nome: String,
-    val email: String
+    val email: String,
+    val telefone: String
 )
 
 // ============================================================================
@@ -41,7 +42,7 @@ data class ConfirmacaoDTO(
 // ============================================================================
 fun Application.cortesiaRouting(database: Database) {
 
-    val LIMITE_MAXIMO_CORTESIAS = 50
+    val LIMITE_MAXIMO_CORTESIAS = 25
     // URL base para onde o QR Code vai apontar
     val BASE_URL_CONFIRMACAO = "https://estrelasdeleiria.pt/painel/confirmar.html"
 
@@ -60,6 +61,7 @@ fun Application.cortesiaRouting(database: Database) {
                     InscritosTable.update({ InscritosTable.stripeId eq request.code }) {
                         it[nome] = request.nome
                         it[email] = request.email
+                        it[telefone] = request.telefone
                         it[confirmado] = true
                     }
                 }
@@ -108,6 +110,7 @@ fun Application.cortesiaRouting(database: Database) {
                         it[checkIn] = false
                         it[descricao] = "Cortesia PDF"
                         it[imageData] = ""
+                        it[telefone] = ""
                         it[desejaParticiparVotacao] = false
                         it[instagram] = ""
                         it[confirmado] = false
