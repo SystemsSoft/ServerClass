@@ -8,81 +8,125 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import java.util.UUID
 import com.lowagie.text.*
-import com.lowagie.text.pdf.PdfWriter
-import java.awt.Color
 import com.lowagie.text.pdf.*
 import java.io.ByteArrayOutputStream
+import java.awt.Color
 import java.net.URL
 
-// DTO Simplificado (Só nome e quantidade fixa)
+// ============================================================================
+// DTOs
+// ============================================================================
+
+// 1. DTO para Gerar o PDF (Admin envia apenas o nome)
 @Serializable
 data class CortesiaDTO(
     val nome: String,
     val quantidade: Int = 1
 )
 
-fun Application.cortesiaRouting(
-    database: Database
-    // Removemos o emailService daqui pois não vamos enviar e-mail
-) {
-    var LIMITE_MAXIMO_CORTESIAS = 20
+// 2. DTO para Confirmar Presença (Convidado envia Código + Nome + Email)
+@Serializable
+data class ConfirmacaoDTO(
+    val code: String,  // O código CORTESIA_XXXX que estava na URL
+    val nome: String,
+    val email: String
+)
+
+// ============================================================================
+// ROTA PRINCIPAL
+// ============================================================================
+fun Application.cortesiaRouting(database: Database) {
+
+    val LIMITE_MAXIMO_CORTESIAS = 50
+    // URL base para onde o QR Code vai apontar
+    val BASE_URL_CONFIRMACAO = "https://estrelasdeleiria.pt/painel/confirmar.html"
 
     routing {
         staticResources("/oferta", "static")
 
+        // --------------------------------------------------------------------
+        // ROTA 1: Confirmar Presença (Atualiza Nome e E-mail no Banco)
+        // --------------------------------------------------------------------
+        post("/api/ticket/confirmar-rsvp") {
+            try {
+                val request = call.receive<ConfirmacaoDTO>()
+
+                // Atualiza o registro buscando pelo stripeId (que é o nosso código único)
+                val updated = newSuspendedTransaction(Dispatchers.IO, db = database) {
+                    InscritosTable.update({ InscritosTable.stripeId eq request.code }) {
+                        it[nome] = request.nome
+                        it[email] = request.email
+                        // it[checkIn] = true // Opcional: Marcar check-in automático ou criar coluna 'confirmado'
+                    }
+                }
+
+                if (updated > 0) {
+                    call.respond(HttpStatusCode.OK, "Presença confirmada com sucesso!")
+                } else {
+                    call.respond(HttpStatusCode.NotFound, "Código do bilhete não encontrado.")
+                }
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, "Erro ao processar: ${e.message}")
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // ROTA 2: Gerar Bilhete PDF (Cria ID, gera Link e PDF)
+        // --------------------------------------------------------------------
         post("/cortesia/baixar") {
             try {
                 val dados = call.receive<CortesiaDTO>()
 
-                // Gera código único
+                // 1. Gera o identificador único (stripeId)
                 val codigoBilhete = "CORTESIA_" + UUID.randomUUID().toString().substring(0, 8).uppercase()
 
-                // Transação do Banco de Dados
+                // 2. Salva no Banco de Dados
                 newSuspendedTransaction(Dispatchers.IO, db = database) {
-                    // 1. Checa Limite
-                    val totalJaEmitidos = InscritosTable.selectAll()
+                    // Checa limite
+                    val total = InscritosTable.selectAll()
                         .where { InscritosTable.categoriaId eq "CORTESIA" }
                         .count()
 
-                    if ((totalJaEmitidos + 1) > LIMITE_MAXIMO_CORTESIAS) {
-                        throw IllegalStateException("Limite de cortesias esgotado!")
+                    if (total >= LIMITE_MAXIMO_CORTESIAS) {
+                        throw IllegalStateException("Limite de cortesias esgotado.")
                     }
 
-                    // 2. Salva no Banco (Com e-mail fictício pois é obrigatório no banco)
                     InscritosTable.insert {
-                        it[id] = UUID.randomUUID().toString()
+                        it[id] = UUID.randomUUID().toString() // ID interno
                         it[nome] = dados.nome
                         it[categoriaId] = "CORTESIA"
-                        it[descricao] = "Cortesia Baixada em PDF"
-                        it[imageData] = ""
-                        it[desejaParticiparVotacao] = false
+
+                        // Aqui guardamos o código único
                         it[stripeId] = codigoBilhete
-                        it[email] = "cortesia_download@sem.email" // E-mail fictício
-                        it[instagram] = ""
+
+                        it[email] = "pendente@rsvp.temp" // Email temporário
                         it[quantidade] = 1
                         it[checkIn] = false
+                        it[descricao] = "Cortesia PDF"
+                        it[imageData] = ""
+                        it[desejaParticiparVotacao] = false
+                        it[instagram] = ""
                     }
                 }
 
-                // 3. GERAÇÃO DO PDF E QR CODE
-                val qrBytes = gerarQrCodeBytes(codigoBilhete)
+                // 3. Monta o Link Completo
+                // Em vez de gravar só o código, gravamos a URL completa no QR Code
+                val linkParaUsuario = "$BASE_URL_CONFIRMACAO?ticket=$codigoBilhete"
 
-                // =================================================================
-                // ATENÇÃO: AQUI VOCÊ CHAMA SUA FUNÇÃO DE GERAR PDF
-                // Use a mesma lógica que usava no EmailService para criar o anexo
-                // =================================================================
+                // 4. Gera a imagem do QR Code com o LINK
+                // (Certifique-se que você tem a função gerarQrCodeBytes disponível no projeto)
+                val qrBytes = gerarQrCodeBytes(linkParaUsuario)
+
+                // 5. Gera o PDF com layout escuro
                 val pdfBytes = gerarPdfEmBytes(dados.nome, qrBytes)
 
-                // 4. Retorna o Arquivo PDF para o navegador baixar
                 call.response.header(
                     HttpHeaders.ContentDisposition,
-                    ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, "bilhete.pdf").toString()
+                    ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, "Bilhete.pdf").toString()
                 )
                 call.respondBytes(pdfBytes, ContentType.Application.Pdf)
 
@@ -96,8 +140,6 @@ fun Application.cortesiaRouting(
     }
 }
 
-
-
 // ============================================================================
 // CLASSE PARA PINTAR O FUNDO (CORRIGIDA)
 // ============================================================================
@@ -108,12 +150,11 @@ class BackgroundEvent(private val backgroundColor: Color) : PdfPageEventHelper()
 
         canvas.setColorFill(backgroundColor)
 
-        // CORREÇÃO AQUI: Usamos as propriedades sem () ou os métodos get...()
         canvas.rectangle(
-            rect.left,   // ou rect.getLeft()
-            rect.bottom, // ou rect.getBottom()
-            rect.width,  // ou rect.getWidth()
-            rect.height  // ou rect.getHeight()
+            rect.left,
+            rect.bottom,
+            rect.width,
+            rect.height
         )
 
         canvas.fill()
@@ -127,22 +168,18 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
     val outputStream = ByteArrayOutputStream()
 
     try {
-        // 1. Criação do Documento (A4 sem margens)
         val document = Document(PageSize.A4, 0f, 0f, 0f, 0f)
         val writer = PdfWriter.getInstance(document, outputStream)
 
-        // --- CORES ---
         val corFundo = Color(18, 18, 18) // #121212
         val corDourada = Color(218, 165, 32) // #DAA520
         val corTextoBranco = Color(255, 255, 255) // #FFFFFF
         val corTextoCinza = Color(204, 204, 204) // #CCCCCC
 
-        // --- REGISTRAR O EVENTO DE FUNDO ---
         writer.pageEvent = BackgroundEvent(corFundo)
 
         document.open()
 
-        // --- FONTES ---
         val fontTitulo = Font(Font.HELVETICA, 14f, Font.BOLD, corDourada)
         val fontSubtitulo = Font(Font.HELVETICA, 10f, Font.NORMAL, corTextoCinza)
         val fontSaudacao = Font(Font.HELVETICA, 16f, Font.NORMAL, corTextoBranco)
@@ -155,14 +192,12 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
         val fontAvisoTitulo = Font(Font.HELVETICA, 10f, Font.BOLD, corDourada)
         val fontAvisoTexto = Font(Font.HELVETICA, 8f, Font.NORMAL, corTextoCinza)
 
-        // --- TABELA PRINCIPAL ---
         val mainTable = PdfPTable(1)
         mainTable.widthPercentage = 100f
         mainTable.defaultCell.border = Rectangle.NO_BORDER
-        // Sem cor de fundo aqui, pois o BackgroundEvent já pintou a página
         mainTable.defaultCell.setPadding(20f)
 
-        // --- 1. LOGO E TÍTULO ---
+        // 1. LOGO E TÍTULO
         val headerCell = PdfPCell()
         headerCell.border = Rectangle.NO_BORDER
         headerCell.horizontalAlignment = Element.ALIGN_CENTER
@@ -184,7 +219,7 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
         headerCell.addElement(tituloGala)
         mainTable.addCell(headerCell)
 
-        // --- 2. SAUDAÇÃO E TEXTO ---
+        // 2. SAUDAÇÃO E TEXTO
         val bodyCell = PdfPCell()
         bodyCell.border = Rectangle.NO_BORDER
         bodyCell.paddingLeft = 40f
@@ -204,7 +239,7 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
         textoConfirmacao.spacingAfter = 30f
         bodyCell.addElement(textoConfirmacao)
 
-        // --- 3. CAIXA DO QR CODE ---
+        // 3. CAIXA DO QR CODE
         val qrBoxTable = PdfPTable(1)
         qrBoxTable.widthPercentage = 60f
         qrBoxTable.defaultCell.border = Rectangle.BOX
@@ -228,7 +263,6 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
             qrBoxTable.addCell(Paragraph("[QR Code]", fontTexto))
         }
 
-        // Botão de Validade
         val validadeTable = PdfPTable(1)
         validadeTable.widthPercentage = 80f
         validadeTable.setSpacingBefore(20f)
@@ -254,7 +288,7 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
         bodyCell.addElement(qrBoxTable)
         mainTable.addCell(bodyCell)
 
-        // --- 4. DATA E LOCAL ---
+        // 4. DATA E LOCAL
         val infoCell = PdfPCell()
         infoCell.border = Rectangle.NO_BORDER
         infoCell.setPadding(40f)
@@ -277,7 +311,6 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
         val mapsCell = PdfPCell(Paragraph(mapsLink))
         mapsCell.borderColor = corDourada
         mapsCell.borderWidth = 1f
-        // Sem cor de fundo para usar o fundo da página
         mapsCell.horizontalAlignment = Element.ALIGN_CENTER
         mapsCell.setPadding(8f)
         mapsTable.addCell(mapsCell)
@@ -285,7 +318,7 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
         infoCell.addElement(mapsTable)
         mainTable.addCell(infoCell)
 
-        // --- 5. RODAPÉ ---
+        // 5. RODAPÉ
         val footerCell = PdfPCell()
         footerCell.border = Rectangle.NO_BORDER
         footerCell.setPadding(40f)
@@ -319,7 +352,7 @@ fun gerarPdfEmBytes(nomeParticipante: String, qrCodeImage: ByteArray): ByteArray
         })
         mainTable.addCell(footerCell)
 
-        // --- 6. AVISO DE SEGURANÇA ---
+        // 6. AVISO DE SEGURANÇA
         val securityCell = PdfPCell()
         securityCell.border = Rectangle.TOP
         securityCell.borderColor = Color(51, 51, 51)

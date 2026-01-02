@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmar Presença</title>
+    <style>
+        body { font-family: sans-serif; background-color: #121212; color: white; text-align: center; padding: 20px; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; margin:0;}
+        .card { background-color: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; text-align: left; }
+        h1 { color: #DAA520; margin-bottom: 20px; text-align: center; }
+        label { display: block; color: #DAA520; margin-bottom: 5px; font-size: 0.9em; font-weight: bold; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #444; background: #000; color: #fff; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background-color: #DAA520; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; color: #000; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        .error-msg { color: #dc3545; text-align: center; margin-top: 15px; font-weight: bold; display: none; }
+        .success-msg { color: #28a745; text-align: center; margin-top: 15px; font-weight: bold; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div style="text-align: center;">
+        <img src="https://repo-estrelas-leiria.s3.us-east-1.amazonaws.com/logo.png" width="100" style="margin-bottom: 15px;">
+    </div>
+
+    <div id="content">
+        <h1>Confirme sua Presença</h1>
+        <p style="color:#ccc; font-size:0.9em; text-align: center; margin-bottom: 25px;">
+            Preencha os seus dados para validar o bilhete.
+        </p>
+
+        <form id="confirmForm">
+            <label for="inputNome">Nome Completo</label>
+            <input type="text" id="inputNome" placeholder="Seu nome" required>
+
+            <label for="inputEmail">E-mail de Contacto</label>
+            <input type="email" id="inputEmail" placeholder="exemplo@email.com" required>
+
+            <button type="submit" id="btnConfirmar">CONFIRMAR E ENVIAR</button>
+        </form>
+
+        <div id="msgError" class="error-msg"></div>
+        <div id="msgSuccess" class="success-msg"></div>
+    </div>
+</div>
+
+<script>
+    // 1. Pega apenas o código da URL. Não faz fetch de dados.
+    const params = new URLSearchParams(window.location.search);
+    const ticketCode = params.get('ticket');
+
+    // Validação básica se o código existe na URL
+    if(!ticketCode) {
+        document.getElementById('confirmForm').style.display = 'none';
+        document.getElementById('msgError').style.display = 'block';
+        document.getElementById('msgError').innerText = "Erro: Link inválido ou sem código de bilhete.";
+    }
+
+    // 2. Envia os dados digitados pelo usuário
+    document.getElementById('confirmForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const btn = document.getElementById('btnConfirmar');
+        const nomeVal = document.getElementById('inputNome').value;
+        const emailVal = document.getElementById('inputEmail').value;
+        const msgError = document.getElementById('msgError');
+        const msgSuccess = document.getElementById('msgSuccess');
+
+        // Limpa mensagens anteriores
+        msgError.style.display = 'none';
+        msgSuccess.style.display = 'none';
+
+        btn.disabled = true;
+        btn.innerText = "A ENVIAR...";
+
+        try {
+            const res = await fetch('/api/ticket/confirmar-rsvp', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    code: ticketCode,
+                    nome: nomeVal,
+                    email: emailVal
+                })
+            });
+
+            if(res.ok) {
+                document.getElementById('confirmForm').style.display = 'none';
+                msgSuccess.style.display = 'block';
+                msgSuccess.innerText = "✅ Obrigado! A sua presença foi confirmada com sucesso.";
+            } else {
+                // Tenta ler mensagem de erro do backend se existir
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.message || "Erro ao confirmar.");
+            }
+        } catch(e) {
+            msgError.style.display = 'block';
+            msgError.innerText = "❌ Falha: Bilhete não encontrado ou erro de conexão.";
+            btn.innerText = "TENTAR NOVAMENTE";
+            btn.style.backgroundColor = "#dc3545";
+            btn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
