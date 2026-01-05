@@ -71,6 +71,9 @@ object PreInscricoesTable : Table("pre_inscricoes_v2") {
     val desejaParticiparVotacao = bool("deseja_participar_votacao").default(false)
     val quantidade = integer("quantidade").default(1)
     val status = varchar("status", 20).default("AGUARDANDO")
+
+    val telefone = varchar("telefone", 50).default("")
+    val confirmado = bool("confirmado").default(false)
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -312,6 +315,8 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                                         it[stripeId] = stripeSessionId
                                         it[email] = customerEmail
                                         it[quantidade] = qtdFinal
+                                        it[confirmado] = false
+                                        it[telefone] = ""
                                     }
                                 }
 
@@ -362,6 +367,9 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                         it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
                         it[quantidade] = 1
                         it[status] = "AGUARDANDO"
+
+                        it[telefone] = ""
+                        it[confirmado] = false
                     }[PreInscricoesTable.id]
                 }
                 call.respond(HttpStatusCode.Created, mapOf("id" to novoId))
