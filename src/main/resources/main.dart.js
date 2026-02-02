@@ -44335,7 +44335,7 @@ return A.jB(!1,A.aR(a,s,s,s,B.Ba,s,s),s,s,s,s,s,s,new A.aq1(this),s,r)},
 a6O(a,b){var s=null,r=A.aJ(4)
 r=A.iH(s,s,B.H,s,s,s,5,s,s,B.f,s,s,B.oy,s,new A.bM(r,B.r),new A.ax(B.k,0,B.v,-1),s,s,s,s)
 return A.jB(!1,A.aR(a,s,s,s,B.Ba,s,s),s,s,s,s,s,s,new A.aq2(this),s,r)},
-a6X(a){var s=null,r=a?220:300,q=A.aR("REALIZA\xc7\xc3O",s,s,s,A.bE(s,s,B.k,s,s,s,s,s,s,s,s,a?12:14,s,s,B.W,s,s,!0,s,2,s,s,s,s,s,s),s,s),p=t.p,o=A.cn(s,A.cF(A.b([A.dr("https://repo-estrelas-leiria.s3.us-east-1.amazonaws.com/patrocinadores/AQUEI-E-LEIRIA.png",B.y,new A.aq5(r),B.a_,s,s,r,s,r)],p),B.t,B.o,B.b4,0),B.E,!1,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,new A.aq6(),s,s,s,s,s,s,!1,B.X),n=A.aR("DATA DO EVENTO: 07-02-2026",s,s,s,A.bE(s,s,B.H,s,s,s,s,s,s,s,s,a?13:15,s,s,B.W,s,s,!0,s,1.2,s,s,s,s,s,s),B.ab,s)
+a6X(a){var s=null,r=a?220:300,q=A.aR("REALIZA\xc7\xc3O",s,s,s,A.bE(s,s,B.k,s,s,s,s,s,s,s,s,a?12:14,s,s,B.W,s,s,!0,s,2,s,s,s,s,s,s),s,s),p=t.p,o=A.cn(s,A.cF(A.b([A.dr("https://repo-estrelas-leiria.s3.us-east-1.amazonaws.com/patrocinadores/AQUEI-E-LEIRIA.png",B.y,new A.aq5(r),B.a_,s,s,r,s,r)],p),B.t,B.o,B.b4,0),B.E,!1,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,s,new A.aq6(),s,s,s,s,s,s,!1,B.X),n=A.aR("Data para o evento em breve!",s,s,s,A.bE(s,s,B.H,s,s,s,s,s,s,s,s,a?13:15,s,s,B.W,s,s,!0,s,1.2,s,s,s,s,s,s),B.ab,s)
 return A.aK(s,A.aZ(A.b([q,B.aE,o,B.AG,n,B.aE,A.aR("\xa9 2025 Estrelas de Leiria. Todos os direitos reservados.",s,s,s,A.bE(s,s,B.cV,s,s,s,s,s,s,s,s,a?10:12,s,s,s,s,s,!0,s,s,s,s,s,s,s,s),s,s)],p),B.t,B.bu,B.p),B.m,s,s,s,s,s,s,B.ov,s,s,1/0)}}
 A.aqq.prototype={
 $1(a){return B.lA},
