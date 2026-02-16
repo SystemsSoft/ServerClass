@@ -133,7 +133,7 @@ class EmailService {
                                                             <tr>
                                                                 <td style="padding-bottom: 15px; border-bottom: 1px solid #333333;">
                                                                     <p style="color: #DAA520; font-size: 11px; font-weight: bold; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px;">DATA DO EVENTO</p>
-                                                                    <p style="color: #ffffff; font-size: 16px; margin: 0;">📅 <strong>07 de Fevereiro de 2026</strong></p>
+                                                                    <p style="color: #ffffff; font-size: 16px; margin: 0;">📅 <strong>Anúncio para nova data em breve!</strong></p>
                                                                 </td>
                                                             </tr>
                                                             <tr>
