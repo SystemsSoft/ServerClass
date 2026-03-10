@@ -7,6 +7,9 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.koin.ktor.ext.inject
 import schemas.estrelasLeiria.EbookPaidSessionService
 
@@ -14,7 +17,6 @@ fun Application.ebookWebhookRouting() {
     val ebookService: EbookPaidSessionService by inject()
 
     routing {
-        // Webhook da Stripe: registra sessões pagas no banco
         post("/ebook") {
             val payload = call.receiveText()
             println(">>> Ebook Webhook recebido, payload size: ${payload.length}")
@@ -39,13 +41,30 @@ fun Application.ebookWebhookRouting() {
 
                 if (event.type == "checkout.session.completed") {
                     val sessionObj = event.dataObjectDeserializer.`object`.orElse(null)
-                    println(">>> Session object tipo: ${sessionObj?.javaClass?.simpleName}")
 
-                    if (sessionObj is Session) {
-                        ebookService.register(sessionObj.id)
-                        println(">>> Sessão paga registada: ${sessionObj.id}")
+                    val sessionId = if (sessionObj is Session) {
+                        sessionObj.id
                     } else {
-                        println(">>> AVISO: sessionObj não é Session, é ${sessionObj?.javaClass?.simpleName}")
+                        println(">>> Deserializador retornou null, extraindo do raw JSON...")
+                        try {
+                            val dataJson = Json.parseToJsonElement(payload)
+                                .jsonObject["data"]
+                                ?.jsonObject?.get("object")
+                                ?.jsonObject?.get("id")
+                                ?.jsonPrimitive?.content
+                            println(">>> session_id extraído do raw JSON: $dataJson")
+                            dataJson
+                        } catch (ex: Exception) {
+                            println(">>> ERRO ao extrair session_id do raw JSON: ${ex.message}")
+                            null
+                        }
+                    }
+
+                    if (sessionId != null) {
+                        ebookService.register(sessionId)
+                        println(">>> Sessão paga registada: $sessionId")
+                    } else {
+                        println(">>> ERRO: não foi possível obter session_id")
                     }
                 }
                 call.respond(HttpStatusCode.OK)
@@ -55,7 +74,6 @@ fun Application.ebookWebhookRouting() {
             }
         }
 
-        // Front consulta se o pagamento foi aprovado
         get("/ebook-status") {
             val sessionId = call.request.queryParameters["session_id"]
                 ?: return@get call.respondText("pending")
