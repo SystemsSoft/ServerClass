@@ -17,18 +17,35 @@ fun Application.ebookWebhookRouting() {
         // Webhook da Stripe: registra sessões pagas no banco
         post("/ebook") {
             val payload = call.receiveText()
+            println(">>> Ebook Webhook recebido, payload size: ${payload.length}")
+
             val sigHeader = call.request.headers["Stripe-Signature"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, "Missing Stripe-Signature header")
+                ?: run {
+                    println(">>> ERRO: Stripe-Signature header ausente")
+                    return@post call.respond(HttpStatusCode.BadRequest, "Missing Stripe-Signature header")
+                }
+
             val webhookSecret = System.getenv("STRIPE_EBOOK_WEBHOOK_SECRET")
-                ?: return@post call.respond(HttpStatusCode.InternalServerError, "Webhook secret not configured")
+                ?: run {
+                    println(">>> ERRO: STRIPE_EBOOK_WEBHOOK_SECRET não configurado")
+                    return@post call.respond(HttpStatusCode.InternalServerError, "Webhook secret not configured")
+                }
+
+            println(">>> Webhook secret presente: ${webhookSecret.take(8)}...")
 
             try {
                 val event = Webhook.constructEvent(payload, sigHeader, webhookSecret)
+                println(">>> Evento recebido: ${event.type}")
+
                 if (event.type == "checkout.session.completed") {
-                    val session = event.dataObjectDeserializer.`object`.orElse(null)
-                    if (session is Session) {
-                        ebookService.register(session.id)
-                        println(">>> Sessão paga registada: ${session.id}")
+                    val sessionObj = event.dataObjectDeserializer.`object`.orElse(null)
+                    println(">>> Session object tipo: ${sessionObj?.javaClass?.simpleName}")
+
+                    if (sessionObj is Session) {
+                        ebookService.register(sessionObj.id)
+                        println(">>> Sessão paga registada: ${sessionObj.id}")
+                    } else {
+                        println(">>> AVISO: sessionObj não é Session, é ${sessionObj?.javaClass?.simpleName}")
                     }
                 }
                 call.respond(HttpStatusCode.OK)
