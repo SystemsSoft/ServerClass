@@ -11,6 +11,7 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import schemas.classes.ClassesListService
 import schemas.estrelasLeiria.CategoriaService
+import schemas.estrelasLeiria.EbookPaidSessionService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
 import schemas.imobiliaria.ProprietarioService
@@ -96,5 +97,6 @@ object DatabaseConfig {
         single { CategoriaService(get(named("EstrelasLeiriaDB"))) }
         single { IndicadoService(get(named("EstrelasLeiriaDB"))) }
         single { VotoService(get(named("EstrelasLeiriaDB"))) }
+        single { EbookPaidSessionService(get(named("EstrelasLeiriaDB"))) }
     }
 }

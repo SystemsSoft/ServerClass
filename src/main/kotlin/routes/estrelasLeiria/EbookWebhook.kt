@@ -7,12 +7,14 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-
-private val paidSessions = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+import org.koin.ktor.ext.inject
+import schemas.estrelasLeiria.EbookPaidSessionService
 
 fun Application.ebookWebhookRouting() {
+    val ebookService: EbookPaidSessionService by inject()
+
     routing {
-        // Webhook da Stripe: registra sessões pagas
+        // Webhook da Stripe: registra sessões pagas no banco
         post("/ebook") {
             val payload = call.receiveText()
             val sigHeader = call.request.headers["Stripe-Signature"]
@@ -25,7 +27,7 @@ fun Application.ebookWebhookRouting() {
                 if (event.type == "checkout.session.completed") {
                     val session = event.dataObjectDeserializer.`object`.orElse(null)
                     if (session is Session) {
-                        paidSessions.add(session.id)
+                        ebookService.register(session.id)
                         println(">>> Sessão paga registada: ${session.id}")
                     }
                 }
@@ -39,7 +41,8 @@ fun Application.ebookWebhookRouting() {
         // Front consulta se o pagamento foi aprovado
         get("/ebook-status") {
             val sessionId = call.request.queryParameters["session_id"]
-            call.respondText(if (sessionId != null && paidSessions.contains(sessionId)) "success" else "pending")
+                ?: return@get call.respondText("pending")
+            call.respondText(if (ebookService.isPaid(sessionId)) "success" else "pending")
         }
     }
 }
