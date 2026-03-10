@@ -47,6 +47,7 @@ import kotlin.getValue
 import org.koin.core.qualifier.named
 import routes.estrelasLeiria.adminTicketRouting
 import routes.estrelasLeiria.cortesiaRouting
+import routes.estrelasLeiria.ebookWebhookRouting
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
@@ -128,7 +129,7 @@ private fun Application.configureRoutingEstrelasLeiria() {
     votoRouting(votos)
     stripeRouting(indicados)
     cortesiaRouting(database = databaseEstrelas)
-
+    ebookWebhookRouting() // Register Stripe ebook webhook endpoint
     adminTicketRouting(
         indicadoService = indicados,
         database = databaseEstrelas,
