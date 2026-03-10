@@ -26,6 +26,7 @@ fun Application.configureHTTP() {
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
         allowHeader("MyCustomHeader")
+        allowHeader("Stripe-Signature")
 
         anyHost()
 

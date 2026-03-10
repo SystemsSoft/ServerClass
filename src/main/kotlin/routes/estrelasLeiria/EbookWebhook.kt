@@ -17,7 +17,7 @@ fun Application.ebookWebhookRouting() {
             val payload = call.receiveText()
             val sigHeader = call.request.header("Stripe-Signature")
             val webhookSecret = System.getenv("STRIPE_EBOOK_WEBHOOK_SECRET")
-                ?: "whsec_xxx"
+                ?: "whsec_ivtBBdcV9yjwOUjhUJLisqwBjWPEmGpE"
 
             if (sigHeader == null) {
                 call.respond(HttpStatusCode.BadRequest, "Missing Stripe-Signature header")
@@ -38,7 +38,8 @@ fun Application.ebookWebhookRouting() {
 
                 call.respond(HttpStatusCode.OK)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Webhook error")
+                println(">>> Ebook Webhook ERRO [${e.javaClass.simpleName}]: ${e.message}")
+                call.respond(HttpStatusCode.BadRequest, "Webhook error: ${e.message}")
             }
         }
 
