@@ -12,6 +12,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.ktor.ext.inject
 import schemas.estrelasLeiria.EbookPaidSessionService
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.toString
 
 fun Application.ebookWebhookRouting() {
     val ebookService: EbookPaidSessionService by inject()
@@ -79,5 +81,23 @@ fun Application.ebookWebhookRouting() {
                 ?: return@get call.respondText("pending")
             call.respondText(if (ebookService.isPaid(sessionId)) "success" else "pending")
         }
+
+        get("/ebook-visits") {
+            val count = EbookVisitService.getCount()
+            call.respondText(count.toString())
+        }
+
+        post("/ebook-visit") {
+            val newCount = EbookVisitService.increment()
+            call.respondText(newCount.toString())
+        }
     }
+}
+
+object EbookVisitService {
+    private val visitCount = AtomicLong(0)
+
+    fun increment(): Long = visitCount.incrementAndGet()
+
+    fun getCount(): Long = visitCount.get()
 }
