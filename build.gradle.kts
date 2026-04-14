@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.ktor.server.netty)
     implementation(libs.logback.classic)
     implementation(libs.ktor.server.config.yaml)
+    implementation("org.mindrot:jbcrypt:0.4")
     implementation("com.stripe:stripe-java:28.1.0")
     implementation("aws.sdk.kotlin:s3:1.0.0")
     implementation("com.google.zxing:core:3.5.2")
