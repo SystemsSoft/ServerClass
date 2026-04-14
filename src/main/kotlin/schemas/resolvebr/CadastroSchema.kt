@@ -45,6 +45,12 @@ data class LoginRequest(
 )
 
 @Serializable
+data class UpdateSenhaRequest(
+    val email: String,
+    val novaSenha: String,
+)
+
+@Serializable
 data class CadastroPatch(
     val email: String? = null,
     val nome: String? = null,
@@ -220,5 +226,15 @@ class CadastroService(private val database: Database) {
         if (senha != senhaHash) return@dbQuery null
 
         toDto(row)
+    }
+
+    // ── UPDATE SENHA ──────────────────────────────────────────────
+    // Localiza o cadastro pelo e-mail e atualiza a senha.
+    suspend fun updateSenha(email: String, novaSenha: String): Boolean = dbQuery {
+        val updated = CadastrosTable.update({ CadastrosTable.email eq email }) {
+            it[CadastrosTable.senha]        = novaSenha
+            it[CadastrosTable.atualizadoEm] = now()
+        }
+        updated > 0
     }
 }

@@ -9,6 +9,7 @@ import schemas.resolvebr.Cadastro
 import schemas.resolvebr.CadastroService
 import schemas.resolvebr.CadastroPatch
 import schemas.resolvebr.LoginRequest
+import schemas.resolvebr.UpdateSenhaRequest
 import java.util.UUID
 
 fun Application.cadastroRouting(cadastroService: CadastroService) {
@@ -31,6 +32,29 @@ fun Application.cadastroRouting(cadastroService: CadastroService) {
                     call.respond(
                         HttpStatusCode.InternalServerError,
                         mapOf("message" to "Erro ao autenticar: ${e.message}")
+                    )
+                }
+            }
+
+            // ── PATCH /auth/senha ────────────────────────────────────
+            // Body: { "email": "...", "novaSenha": "..." }
+            patch("/senha") {
+                try {
+                    val body = call.receive<UpdateSenhaRequest>()
+
+                    val updated = cadastroService.updateSenha(body.email, body.novaSenha)
+                    if (!updated) {
+                        return@patch call.respond(
+                            HttpStatusCode.NotFound,
+                            mapOf("message" to "Nenhum cadastro encontrado com o e-mail: ${body.email}")
+                        )
+                    }
+
+                    call.respond(HttpStatusCode.OK, mapOf("message" to "Senha atualizada com sucesso"))
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        mapOf("message" to "Erro ao atualizar senha: ${e.message}")
                     )
                 }
             }
