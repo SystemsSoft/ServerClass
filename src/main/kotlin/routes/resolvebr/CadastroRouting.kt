@@ -8,10 +8,33 @@ import io.ktor.server.routing.*
 import schemas.resolvebr.Cadastro
 import schemas.resolvebr.CadastroService
 import schemas.resolvebr.CadastroPatch
+import schemas.resolvebr.LoginRequest
 import java.util.UUID
 
 fun Application.cadastroRouting(cadastroService: CadastroService) {
     routing {
+
+        // ── POST /auth/login ─────────────────────────────────────────
+        route("/auth") {
+            post("/login") {
+                try {
+                    val body = call.receive<LoginRequest>()
+
+                    val dto = cadastroService.login(body.email, body.senha)
+                        ?: return@post call.respond(
+                            HttpStatusCode.Unauthorized,
+                            mapOf("message" to "E-mail ou senha inválidos")
+                        )
+
+                    call.respond(HttpStatusCode.OK, dto)
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        mapOf("message" to "Erro ao autenticar: ${e.message}")
+                    )
+                }
+            }
+        }
 
         route("/cadastros") {
 

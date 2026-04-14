@@ -6,7 +6,6 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.mindrot.jbcrypt.BCrypt
 
 // =================================================================
 // 1. MODELOS DE DADOS
@@ -37,6 +36,12 @@ data class CadastroDto(
     val criadoEm: String,
     val atualizadoEm: String,
     // senha NÃO é retornada por segurança
+)
+
+@Serializable
+data class LoginRequest(
+    val email: String,
+    val senha: String,
 )
 
 @Serializable
@@ -104,8 +109,7 @@ class CadastroService(private val database: Database) {
 
     // ── CREATE ────────────────────────────────────────────────────
     suspend fun create(cadastro: Cadastro, id: String): CadastroDto {
-        val ts           = now()
-        val senhaHash    = BCrypt.hashpw(cadastro.senha, BCrypt.gensalt())
+        val ts = now()
         return dbQuery {
             CadastrosTable.insert {
                 it[CadastrosTable.id]           = id
@@ -115,7 +119,7 @@ class CadastroService(private val database: Database) {
                 it[CadastrosTable.categoria]    = cadastro.categoria
                 it[CadastrosTable.endereco]     = cadastro.endereco
                 it[CadastrosTable.telefone]     = cadastro.telefone
-                it[CadastrosTable.senha]        = senhaHash
+                it[CadastrosTable.senha]        = cadastro.senha
                 it[CadastrosTable.instagram]    = cadastro.instagram
                 it[CadastrosTable.criadoEm]     = ts
                 it[CadastrosTable.atualizadoEm] = ts
@@ -162,7 +166,6 @@ class CadastroService(private val database: Database) {
 
     // ── UPDATE (completo) ─────────────────────────────────────────
     suspend fun update(id: String, cadastro: Cadastro): CadastroDto? = dbQuery {
-        val senhaHash = BCrypt.hashpw(cadastro.senha, BCrypt.gensalt())
         val updated = CadastrosTable.update({ CadastrosTable.id eq id }) {
             it[CadastrosTable.email]        = cadastro.email
             it[CadastrosTable.nome]         = cadastro.nome
@@ -170,7 +173,7 @@ class CadastroService(private val database: Database) {
             it[CadastrosTable.categoria]    = cadastro.categoria
             it[CadastrosTable.endereco]     = cadastro.endereco
             it[CadastrosTable.telefone]     = cadastro.telefone
-            it[CadastrosTable.senha]        = senhaHash
+            it[CadastrosTable.senha]        = cadastro.senha
             it[CadastrosTable.instagram]    = cadastro.instagram
             it[CadastrosTable.atualizadoEm] = now()
         }
@@ -191,7 +194,7 @@ class CadastroService(private val database: Database) {
             fields.endereco?.let  { v -> it[CadastrosTable.endereco]  = v }
             fields.telefone?.let  { v -> it[CadastrosTable.telefone]  = v }
             fields.instagram?.let { v -> it[CadastrosTable.instagram] = v }
-            fields.senha?.let     { v -> it[CadastrosTable.senha]     = BCrypt.hashpw(v, BCrypt.gensalt()) }
+            fields.senha?.let     { v -> it[CadastrosTable.senha]     = v }
             it[CadastrosTable.atualizadoEm] = now()
         }
         if (updated == 0) return@dbQuery null
@@ -204,5 +207,18 @@ class CadastroService(private val database: Database) {
     // ── DELETE ────────────────────────────────────────────────────
     suspend fun delete(id: String): Boolean = dbQuery {
         CadastrosTable.deleteWhere { CadastrosTable.id eq id } > 0
+    }
+
+    // ── LOGIN ─────────────────────────────────────────────────────
+    // Verifica email + senha e retorna o CadastroDto se válido, null se inválido.
+    suspend fun login(email: String, senha: String): CadastroDto? = dbQuery {
+        val row = CadastrosTable.selectAll()
+            .where { CadastrosTable.email eq email }
+            .singleOrNull() ?: return@dbQuery null
+
+        val senhaHash = row[CadastrosTable.senha]
+        if (senha != senhaHash) return@dbQuery null
+
+        toDto(row)
     }
 }
