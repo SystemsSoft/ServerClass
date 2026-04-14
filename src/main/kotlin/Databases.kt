@@ -12,6 +12,7 @@ import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.EbookPaidSessionService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
+import schemas.resolvebr.CadastroService
 import schemas.users.ClientService
 
 
@@ -71,5 +72,13 @@ object DatabaseConfig {
         single { IndicadoService(get(named("EstrelasLeiriaDB"))) }
         single { VotoService(get(named("EstrelasLeiriaDB"))) }
         single { EbookPaidSessionService(get(named("EstrelasLeiriaDB"))) }
+    }
+
+    val resolvebr = module {
+        single(named("ResolveBrDB")) {
+            conectarBanco("resolvebr", maxConexoes = 5)
+        }
+
+        single { CadastroService(get(named("ResolveBrDB"))) }
     }
 }

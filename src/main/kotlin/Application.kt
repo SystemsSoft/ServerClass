@@ -5,6 +5,7 @@ import UploadService
 import com.class_erp.DatabaseConfig.classModule
 import com.class_erp.DatabaseConfig.clientModule
 import com.class_erp.DatabaseConfig.estrelasLeiria
+import com.class_erp.DatabaseConfig.resolvebr
 import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
@@ -32,6 +33,8 @@ import org.koin.core.qualifier.named
 import routes.estrelasLeiria.adminTicketRouting
 import routes.estrelasLeiria.cortesiaRouting
 import routes.estrelasLeiria.ebookWebhookRouting
+import routes.resolvebr.cadastroRouting
+import schemas.resolvebr.CadastroService
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
@@ -43,6 +46,7 @@ fun Application.module() {
     configureDependencyInjection()
     configureRouting()
     configureRoutingEstrelasLeiria()
+    configureRoutingResolveBr()
 }
 
 fun Application.configureContentNegotiation() {
@@ -62,6 +66,7 @@ private fun Application.configureDependencyInjection() {
             classModule,
             clientModule,
             estrelasLeiria,
+            resolvebr,
         )
     }
 }
@@ -100,6 +105,12 @@ private fun Application.configureRoutingEstrelasLeiria() {
         database = databaseEstrelas,
         emailService = emailService
     )
+}
+
+private fun Application.configureRoutingResolveBr() {
+    val cadastroService by inject<CadastroService>()
+
+    cadastroRouting(cadastroService)
 }
 
 
