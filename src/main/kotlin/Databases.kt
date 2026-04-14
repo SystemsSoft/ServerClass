@@ -1,7 +1,5 @@
 package com.class_erp
 
-import ClientMecService
-import ExpenseService
 import UploadService
 import com.class_erp.schemas.AccessService
 import com.zaxxer.hikari.HikariConfig
@@ -14,12 +12,8 @@ import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.EbookPaidSessionService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
-import schemas.imobiliaria.ProprietarioService
 import schemas.users.ClientService
-import schemas.mec.PriceTableMecService
-import schemas.mec.RevenueService
-import schemas.mec.ServiceOrderService
-import schemas.mec.VehicleService
+
 
 object DatabaseConfig {
 
@@ -65,27 +59,6 @@ object DatabaseConfig {
         }
 
         single { ClientService(get(named("ClientDB"))) }
-    }
-
-    val imobiliaria = module {
-        single(named("ImobiliariaDB")) {
-            conectarBanco("Imob", maxConexoes = 1)
-        }
-
-        single { ProprietarioService(get(named("ImobiliariaDB"))) }
-    }
-
-    val mecModule = module {
-        single(named("MecDB")) {
-            conectarBanco("mec", maxConexoes = 1)
-        }
-
-        single { ClientMecService(get(named("MecDB"))) }
-        single { ExpenseService(get(named("MecDB"))) }
-        single { PriceTableMecService(get(named("MecDB"))) }
-        single { RevenueService(get(named("MecDB"))) }
-        single { ServiceOrderService(get(named("MecDB"))) }
-        single { VehicleService(get(named("MecDB"))) }
     }
 
 
