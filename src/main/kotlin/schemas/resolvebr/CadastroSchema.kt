@@ -231,10 +231,19 @@ class CadastroService(private val database: Database) {
     // ── UPDATE SENHA ──────────────────────────────────────────────
     // Localiza o cadastro pelo e-mail e atualiza a senha.
     suspend fun updateSenha(email: String, novaSenha: String): Boolean = dbQuery {
-        val updated = CadastrosTable.update({ CadastrosTable.email eq email }) {
+        // Primeiro verifica se o cadastro existe com esse e-mail
+        val exists = CadastrosTable.selectAll()
+            .where { CadastrosTable.email eq email }
+            .singleOrNull() != null
+
+        if (!exists) return@dbQuery false
+
+        // Executa o update (independente de rows affected, sabemos que existe)
+        CadastrosTable.update({ CadastrosTable.email eq email }) {
             it[CadastrosTable.senha]        = novaSenha
             it[CadastrosTable.atualizadoEm] = now()
         }
-        updated > 0
+
+        true
     }
 }
