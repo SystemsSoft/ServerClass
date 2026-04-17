@@ -27,12 +27,14 @@ object DatabaseConfig {
 
             // CONFIGURAÇÕES DE LIMITE
             maximumPoolSize = maxConexoes
-            minimumIdle = 0 // Permite fechar todas se não estiver usando (economia)
-            idleTimeout = 300000 // 5 minutos sem uso = fecha conexão
-            connectionTimeout = 10000 // 10 segundos para desistir se estiver cheio
-            maxLifetime = 1800000 // 30 minutos vida máxima da conexão
+            minimumIdle = 0
+            idleTimeout = 300000
+            connectionTimeout = 10000
+            maxLifetime = 1800000
 
-            // Otimizações
+            // Permite BLOBs grandes (500 MB) — resolve "Packet too large" do MySQL
+            addDataSourceProperty("maxAllowedPacket", "524288000")
+
             isAutoCommit = false
             transactionIsolation = "TRANSACTION_REPEATABLE_READ"
             validate()
