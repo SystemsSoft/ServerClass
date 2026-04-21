@@ -15,6 +15,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.request.receiveStream
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -28,7 +29,7 @@ fun Application.uploadRouting(uploadsService: UploadService) {
         post("/upload") {
             try {
                 val id = uploadsService.create(call.receive<UploadList>())
-                call.respond(HttpStatusCode.OK, mapOf("id" to id))
+                call.respondText(id.toString(), status = HttpStatusCode.OK)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
             }
