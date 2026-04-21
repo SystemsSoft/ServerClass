@@ -1,19 +1,56 @@
 package services
 
 import aws.sdk.kotlin.services.s3.S3Client
+import aws.sdk.kotlin.services.s3.model.GetObjectRequest
 import aws.sdk.kotlin.services.s3.model.PutObjectRequest
+import aws.sdk.kotlin.services.s3.presigners.presignGetObject
 import aws.smithy.kotlin.runtime.content.ByteStream
 import java.util.Base64
+import kotlin.time.Duration.Companion.hours
 
 class S3ApiClient {
 
     companion object {
-        private const val REGION = "us-east-1" // Ajuste sua região
-        private const val BUCKET_NAME = "repo-estrelas-leiria"
+        private const val REGION = "us-east-2" // Ajuste sua região
+        private const val BUCKET_NAME = "repo-english-class"
         private const val BASE_URL = "https://$BUCKET_NAME.s3.$REGION.amazonaws.com"
 
         private val s3Client by lazy {
             S3Client { region = REGION }
+        }
+
+        /**
+         * Faz upload de um vídeo MP4 para o S3 e retorna a key do objeto.
+         */
+        suspend fun uploadVideo(lessonId: Int, videoBytes: ByteArray): String {
+            val key = "lessons/$lessonId.mp4"
+            println("[S3] Iniciando upload do vídeo: key=$key, tamanho=${videoBytes.size} bytes (%.1f MB)".format(videoBytes.size / 1_048_576.0))
+            try {
+                s3Client.putObject(PutObjectRequest {
+                    bucket = BUCKET_NAME
+                    this.key = key
+                    body = ByteStream.fromBytes(videoBytes)
+                    contentType = "video/mp4"
+                })
+                println("[S3] ✅ Vídeo enviado com sucesso: $key")
+                return key
+            } catch (e: Exception) {
+                println("[S3] ❌ Erro no upload do vídeo: ${e.message}")
+                throw e
+            }
+        }
+
+        /**
+         * Gera uma URL pré-assinada do S3 válida por 1 hora para streaming direto.
+         * Suporta Range requests (seek no player de vídeo).
+         */
+        suspend fun generatePresignedUrl(key: String): String {
+            val request = GetObjectRequest {
+                bucket = BUCKET_NAME
+                this.key = key
+            }
+            val presigned = s3Client.presignGetObject(request, 1.hours)
+            return presigned.url.toString()
         }
 
         suspend fun uploadImage(fileId: String, base64Raw: String): String {

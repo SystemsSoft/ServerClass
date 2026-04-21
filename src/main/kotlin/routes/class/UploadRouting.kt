@@ -3,6 +3,7 @@ package routes.`class`
 import schemas.classes.UploadList
 import schemas.classes.UploadDeleteRequest
 import schemas.classes.UploadService
+import services.S3ApiClient
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
@@ -13,7 +14,6 @@ import io.ktor.server.request.contentType
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -37,7 +37,7 @@ fun Application.uploadRouting(uploadsService: UploadService) {
             try {
                 call.respond(HttpStatusCode.OK, uploadsService.readAll())
             } catch (e: Throwable) {
-                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar aulas: ${e.message}")
             }
         }
 
@@ -45,46 +45,32 @@ fun Application.uploadRouting(uploadsService: UploadService) {
             try {
                 val classCode = call.request.queryParameters["classCode"]
                 val active = call.request.queryParameters["active"]?.toBooleanStrictOrNull()
-
                 if (classCode == null) {
                     call.respond(HttpStatusCode.BadRequest, "Parâmetro 'classCode' é obrigatório.")
                     return@get
                 }
-
-                val filteredUploads = uploadsService.readFiltered(classCode, active)
-                call.respond(HttpStatusCode.OK, filteredUploads)
+                call.respond(HttpStatusCode.OK, uploadsService.readFiltered(classCode, active))
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar uploads filtrados: ${e.message}")
             }
         }
 
-
         put("/upload") {
             try {
                 val upload = call.receive<UploadList>()
-                val id = upload.id
-                if (id == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Campo 'id' é obrigatório para update.")
-                    return@put
-                }
-
-                call.respond(
-                    HttpStatusCode.OK, uploadsService.update(
-                        id,
-                        upload
-                    )
-                )
+                val id = upload.id ?: return@put call.respond(HttpStatusCode.BadRequest, "Campo 'id' é obrigatório.")
+                call.respond(HttpStatusCode.OK, uploadsService.update(id, upload))
             } catch (e: Throwable) {
-                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao atualizar: ${e.message}")
             }
         }
 
         delete("/upload") {
             try {
-                val classe = call.receive<UploadDeleteRequest>()
-                call.respond(HttpStatusCode.OK, uploadsService.delete(classe.id))
+                val req = call.receive<UploadDeleteRequest>()
+                call.respond(HttpStatusCode.OK, uploadsService.delete(req.id))
             } catch (e: Throwable) {
-                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar classes: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao deletar: ${e.message}")
             }
         }
 
@@ -92,12 +78,7 @@ fun Application.uploadRouting(uploadsService: UploadService) {
 
         /**
          * POST /upload/video/{id}
-         * Aceita dois formatos:
-         *   1. multipart/form-data com campo "video" (recomendado para Flutter Web / browsers)
-         *   2. Raw bytes no body (application/octet-stream ou video/mp4)
-         *
-         * O multipart/form-data é a forma correta para Flutter Web pois evita o problema de
-         * "Invalid array length" ao tentar alocar arquivos grandes como Uint8List em memória.
+         * Recebe o vídeo (multipart ou raw), envia para S3 e salva a key no banco.
          */
         post("/upload/video/{id}") {
             val id = call.parameters["id"]?.toIntOrNull()
@@ -108,62 +89,47 @@ fun Application.uploadRouting(uploadsService: UploadService) {
             println("[VIDEO]   Content-Length: ${call.request.headers["Content-Length"] ?: "não informado"} bytes")
 
             try {
-                val contentType = call.request.contentType()
                 val videoBytes: ByteArray
 
-                if (contentType.match(ContentType.MultiPart.FormData)) {
-                    // ── Modo multipart/form-data (Flutter Web, browsers) ──────────────
+                if (call.request.contentType().match(ContentType.MultiPart.FormData)) {
                     println("[VIDEO]   Modo: multipart/form-data")
                     var collected: ByteArray? = null
-                    var partCount = 0
 
-                    val multipart = call.receiveMultipart(formFieldLimit = 600 * 1024 * 1024L)
-                    multipart.forEachPart { part ->
-                        partCount++
-                        println("[VIDEO]   Part #$partCount — tipo=${part::class.simpleName} nome='${part.name}'")
+                    call.receiveMultipart(formFieldLimit = 600 * 1024 * 1024L).forEachPart { part ->
                         if (part is PartData.FileItem && collected == null) {
-                            println("[VIDEO]   Lendo bytes da part '${part.name}'...")
-                            try {
-                                collected = part.streamProvider().readBytes()
-                                println("[VIDEO]   Part lida: ${collected!!.size} bytes (%.1f MB)".format(collected!!.size / 1_048_576.0))
-                            } catch (e: Exception) {
-                                println("[VIDEO] ❌ Erro ao ler bytes da part: ${e::class.simpleName}: ${e.message}")
-                                e.printStackTrace()
-                            }
+                            println("[VIDEO]   Lendo part '${part.name}'...")
+                            collected = part.streamProvider().readBytes()
+                            println("[VIDEO]   Part lida: ${collected!!.size} bytes")
                         }
                         part.dispose()
                     }
-                    println("[VIDEO]   Total de parts recebidas: $partCount")
 
                     if (collected == null || collected!!.isEmpty()) {
-                        println("[VIDEO] ❌ Nenhum arquivo encontrado nas parts.")
-                        call.respond(HttpStatusCode.BadRequest, "Nenhum arquivo enviado. Use o campo 'video' no form-data.")
+                        call.respond(HttpStatusCode.BadRequest, "Nenhum arquivo enviado.")
                         return@post
                     }
                     videoBytes = collected!!
-
                 } else {
-                    // ── Modo raw bytes (application/octet-stream / video/mp4) ─────────
                     println("[VIDEO]   Modo: raw bytes")
                     videoBytes = call.receive<ByteArray>()
                     if (videoBytes.isEmpty()) {
-                        println("[VIDEO] ❌ Body vazio recebido.")
-                        call.respond(HttpStatusCode.BadRequest, "Body vazio: nenhum byte recebido.")
+                        call.respond(HttpStatusCode.BadRequest, "Body vazio.")
                         return@post
                     }
                 }
 
                 println("[VIDEO]   Total recebido: ${videoBytes.size} bytes (%.1f MB)".format(videoBytes.size / 1_048_576.0))
-                println("[VIDEO]   Primeiros 4 bytes (magic): ${videoBytes.take(4).map { "0x%02X".format(it) }}")
 
-                println("[VIDEO]   Salvando no banco...")
-                val saved = uploadsService.saveVideo(id, videoBytes)
+                println("[VIDEO]   Enviando para S3...")
+                val s3Key = S3ApiClient.uploadVideo(id, videoBytes)
+
+                println("[VIDEO]   Salvando key no banco: $s3Key")
+                val saved = uploadsService.saveVideoKey(id, s3Key)
 
                 if (saved) {
-                    println("[VIDEO] ✅ Vídeo salvo com sucesso para id=$id")
-                    call.respond(HttpStatusCode.OK, "Vídeo salvo com sucesso (${videoBytes.size} bytes).")
+                    println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $s3Key")
+                    call.respond(HttpStatusCode.OK, mapOf("key" to s3Key))
                 } else {
-                    println("[VIDEO] ❌ Aula id=$id não encontrada no banco.")
                     call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
                 }
             } catch (e: Throwable) {
@@ -175,24 +141,25 @@ fun Application.uploadRouting(uploadsService: UploadService) {
 
         /**
          * GET /upload/video/{id}
-         * Devolve os bytes do vídeo com Content-Type: video/mp4 para reprodução direta.
+         * Retorna uma URL pré-assinada do S3 válida por 1 hora.
+         * O player faz streaming diretamente do S3 com suporte a seek (Range requests).
          */
         get("/upload/video/{id}") {
             val id = call.parameters["id"]?.toIntOrNull()
                 ?: return@get call.respond(HttpStatusCode.BadRequest, "ID inválido.")
 
-            println("[VIDEO-GET] ▶ Buscando vídeo para aula id=$id")
+            println("[VIDEO-GET] ▶ Buscando URL para aula id=$id")
             try {
-                val videoBytes = uploadsService.getVideo(id)
-                if (videoBytes != null) {
-                    println("[VIDEO-GET] ✅ Vídeo encontrado para id=$id — ${videoBytes.size} bytes (%.1f MB)".format(videoBytes.size / 1_048_576.0))
-                    call.respondBytes(videoBytes, ContentType.parse("video/mp4"))
-                } else {
-                    println("[VIDEO-GET] ❌ Vídeo não encontrado no banco para id=$id")
+                val s3Key = uploadsService.getVideoKey(id)
+                if (s3Key == null) {
                     call.respond(HttpStatusCode.NotFound, "Vídeo não encontrado para id=$id.")
+                    return@get
                 }
+                val presignedUrl = S3ApiClient.generatePresignedUrl(s3Key)
+                println("[VIDEO-GET] ✅ URL gerada para id=$id")
+                call.respond(HttpStatusCode.OK, mapOf("url" to presignedUrl))
             } catch (e: Throwable) {
-                println("[VIDEO-GET] ❌ Exceção ao buscar vídeo id=$id: ${e::class.simpleName}: ${e.message}")
+                println("[VIDEO-GET] ❌ Exceção id=$id: ${e::class.simpleName}: ${e.message}")
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar vídeo: ${e.message}")
             }
