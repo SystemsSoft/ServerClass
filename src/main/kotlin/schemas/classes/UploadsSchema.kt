@@ -56,7 +56,7 @@ class UploadService(private val database: Database) {
         val fileName  = varchar("fileName", length = 512).nullable()
         val fileCode  = varchar("fileCode", length = 100).nullable()
         val classCode = varchar("classCode", length = 100).nullable()
-        val fileType  = varchar("fileType", length = 50).nullable()
+        val fileType  = varchar("fileType", length = 150).nullable()
 
         override val primaryKey = PrimaryKey(id)
     }
