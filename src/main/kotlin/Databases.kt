@@ -23,17 +23,11 @@ object DatabaseConfig {
     private val dbPassword = "dbmasteruser"
 
     private fun criarBancoSeNaoExistir(dbName: String) {
-        val url = "jdbc:mysql://$host:3306/?maxAllowedPacket=629145600"
+        Class.forName("com.mysql.cj.jdbc.Driver")
+        val url = "jdbc:mysql://$host:3306/"
         val conn = java.sql.DriverManager.getConnection(url, dbUser, dbPassword)
         conn.use { c ->
             c.createStatement().use { stmt ->
-                // Tenta setar globalmente (pode falhar sem permissão, mas tenta)
-                try {
-                    stmt.executeUpdate("SET GLOBAL max_allowed_packet=629145600")
-                    println("[DB] max_allowed_packet GLOBAL definido para 629145600.")
-                } catch (e: Exception) {
-                    println("[DB] Aviso: não foi possível setar GLOBAL max_allowed_packet: ${e.message}")
-                }
                 stmt.executeUpdate("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
                 println("[DB] Banco '$dbName' verificado/criado com sucesso.")
             }
