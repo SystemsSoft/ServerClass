@@ -1,6 +1,6 @@
 package com.class_erp
 
-import UploadService
+import schemas.classes.UploadService
 import com.class_erp.schemas.AccessService
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -20,7 +20,8 @@ object DatabaseConfig {
 
     private fun conectarBanco(dbName: String, maxConexoes: Int): Database {
         val config = HikariConfig().apply {
-            jdbcUrl = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/$dbName"
+            // maxAllowedPacket=629145600 (~600 MB) na URL para garantir que o driver negocie corretamente
+            jdbcUrl = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/$dbName?maxAllowedPacket=629145600"
             username = "dbmasteruser"
             password = "q1w2e3r4"
             driverClassName = "com.mysql.cj.jdbc.Driver"
@@ -32,8 +33,8 @@ object DatabaseConfig {
             connectionTimeout = 10000
             maxLifetime = 1800000
 
-            // Permite BLOBs grandes (500 MB) — resolve "Packet too large" do MySQL
-            addDataSourceProperty("maxAllowedPacket", "524288000")
+            // Permite BLOBs grandes (600 MB) — resolve "Packet too large" do MySQL
+            addDataSourceProperty("maxAllowedPacket", "629145600")
 
             isAutoCommit = false
             transactionIsolation = "TRANSACTION_REPEATABLE_READ"

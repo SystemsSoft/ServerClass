@@ -1,3 +1,5 @@
+package schemas.classes
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -6,6 +8,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.time.Instant
 
 @Serializable
 data class UploadList(
@@ -68,7 +71,7 @@ class UploadService(private val database: Database) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun now(): String = java.time.Instant.now().toString()
+    private fun now(): String = Instant.now().toString()
 
     private fun encodeList(values: List<String>): String = json.encodeToString(values)
 
@@ -87,6 +90,7 @@ class UploadService(private val database: Database) {
     )
 
     suspend fun create(upload: UploadList): Int = dbQuery {
+        println("[DB] create: title='${upload.title}' classNames=${upload.classNames} classCodes=${upload.classCodes} videoName=${upload.videoName} active=${upload.active}")
         val timestamp = now()
         FilesTable.insert {
             it[title] = upload.title
@@ -103,7 +107,9 @@ class UploadService(private val database: Database) {
             it[fileCode] = upload.classCodes.firstOrNull()
             it[classCode] = upload.classCodes.firstOrNull()
             it[fileType] = "lesson"
-        }[FilesTable.id]
+        }[FilesTable.id].also { newId ->
+            println("[DB] create: registro criado com id=$newId")
+        }
     }
 
     suspend fun readAll(): List<UploadListDto> {
@@ -157,23 +163,38 @@ class UploadService(private val database: Database) {
      * Retorna true se o registro foi encontrado e atualizado.
      */
     suspend fun saveVideo(id: Int, videoBytes: ByteArray): Boolean = dbQuery {
-        val updated = FilesTable.update({ FilesTable.id eq id }) {
-            it[videoData] = ExposedBlob(videoBytes)
-            it[updatedAt] = now()
+        println("[DB] saveVideo: id=$id, tamanho=${videoBytes.size} bytes (%.1f MB)".format(videoBytes.size / 1_048_576.0))
+        try {
+            val updated = FilesTable.update({ FilesTable.id eq id }) {
+                it[videoData] = ExposedBlob(videoBytes)
+                it[updatedAt] = now()
+            }
+            println("[DB] saveVideo: rows afetadas=$updated")
+            updated > 0
+        } catch (e: Exception) {
+            println("[DB] ❌ saveVideo ERRO: ${e::class.simpleName}: ${e.message}")
+            e.printStackTrace()
+            throw e
         }
-        updated > 0
     }
 
     /**
      * Retorna os bytes do vídeo armazenado para o registro, ou null se não houver.
      */
     suspend fun getVideo(id: Int): ByteArray? = dbQuery {
-        FilesTable
+        println("[DB] getVideo: buscando vídeo para id=$id")
+        val bytes = FilesTable
             .select(FilesTable.videoData)
             .where { FilesTable.id eq id }
             .singleOrNull()
             ?.get(FilesTable.videoData)
             ?.bytes
+        if (bytes != null) {
+            println("[DB] getVideo: encontrado ${bytes.size} bytes (%.1f MB) para id=$id".format(bytes.size / 1_048_576.0))
+        } else {
+            println("[DB] getVideo: videoData é null para id=$id (registro inexistente ou sem vídeo)")
+        }
+        bytes
     }
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =

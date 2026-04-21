@@ -1,7 +1,7 @@
 package com.class_erp
 
 
-import UploadService
+import schemas.classes.UploadService
 import com.class_erp.DatabaseConfig.classModule
 import com.class_erp.DatabaseConfig.clientModule
 import com.class_erp.DatabaseConfig.estrelasLeiria
