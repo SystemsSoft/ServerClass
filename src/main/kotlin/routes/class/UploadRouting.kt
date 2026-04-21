@@ -13,6 +13,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.request.contentType
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveMultipart
+import io.ktor.server.request.receiveStream
 import io.ktor.server.response.respond
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -89,48 +90,45 @@ fun Application.uploadRouting(uploadsService: UploadService) {
             println("[VIDEO]   Content-Length: ${call.request.headers["Content-Length"] ?: "não informado"} bytes")
 
             try {
-                val videoBytes: ByteArray
-
                 if (call.request.contentType().match(ContentType.MultiPart.FormData)) {
                     println("[VIDEO]   Modo: multipart/form-data")
-                    var collected: ByteArray? = null
+                    var uploaded = false
 
                     call.receiveMultipart(formFieldLimit = 600 * 1024 * 1024L).forEachPart { part ->
-                        if (part is PartData.FileItem && collected == null) {
+                        if (part is PartData.FileItem && !uploaded) {
                             println("[VIDEO]   Lendo part '${part.name}'...")
-                            collected = part.streamProvider().readBytes()
-                            println("[VIDEO]   Part lida: ${collected!!.size} bytes")
+                            val contentLength = call.request.headers["Content-Length"]?.toLongOrNull() ?: -1L
+                            val s3Key = S3ApiClient.uploadVideo(id, part.streamProvider(), contentLength)
+                            println("[VIDEO]   Salvando key no banco: $s3Key")
+                            val saved = uploadsService.saveVideoKey(id, s3Key)
+                            if (saved) {
+                                println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $s3Key")
+                                call.respond(HttpStatusCode.OK, mapOf("key" to s3Key))
+                            } else {
+                                call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
+                            }
+                            uploaded = true
                         }
                         part.dispose()
                     }
 
-                    if (collected == null || collected!!.isEmpty()) {
+                    if (!uploaded) {
                         call.respond(HttpStatusCode.BadRequest, "Nenhum arquivo enviado.")
                         return@post
                     }
-                    videoBytes = collected!!
                 } else {
                     println("[VIDEO]   Modo: raw bytes")
-                    videoBytes = call.receive<ByteArray>()
-                    if (videoBytes.isEmpty()) {
-                        call.respond(HttpStatusCode.BadRequest, "Body vazio.")
-                        return@post
+                    val stream = call.receiveStream()
+                    val contentLength = call.request.headers["Content-Length"]?.toLongOrNull() ?: -1L
+                    val s3Key = S3ApiClient.uploadVideo(id, stream, contentLength)
+                    println("[VIDEO]   Salvando key no banco: $s3Key")
+                    val saved = uploadsService.saveVideoKey(id, s3Key)
+                    if (saved) {
+                        println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $s3Key")
+                        call.respond(HttpStatusCode.OK, mapOf("key" to s3Key))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
                     }
-                }
-
-                println("[VIDEO]   Total recebido: ${videoBytes.size} bytes (%.1f MB)".format(videoBytes.size / 1_048_576.0))
-
-                println("[VIDEO]   Enviando para S3...")
-                val s3Key = S3ApiClient.uploadVideo(id, videoBytes)
-
-                println("[VIDEO]   Salvando key no banco: $s3Key")
-                val saved = uploadsService.saveVideoKey(id, s3Key)
-
-                if (saved) {
-                    println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $s3Key")
-                    call.respond(HttpStatusCode.OK, mapOf("key" to s3Key))
-                } else {
-                    call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
                 }
             } catch (e: Throwable) {
                 println("[VIDEO] ❌ Exceção ao processar upload para id=$id: ${e::class.simpleName}: ${e.message}")

@@ -5,6 +5,8 @@ import aws.sdk.kotlin.services.s3.model.GetObjectRequest
 import aws.sdk.kotlin.services.s3.model.PutObjectRequest
 import aws.sdk.kotlin.services.s3.presigners.presignGetObject
 import aws.smithy.kotlin.runtime.content.ByteStream
+import java.io.File
+import java.io.InputStream
 import java.util.Base64
 import kotlin.time.Duration.Companion.hours
 
@@ -20,16 +22,20 @@ class S3ApiClient {
         }
 
         /**
-         * Faz upload de um vídeo MP4 para o S3 e retorna a key do objeto.
+         * Faz upload de um vídeo MP4 para o S3 a partir de um InputStream (sem carregar tudo na RAM).
          */
-        suspend fun uploadVideo(lessonId: Int, videoBytes: ByteArray): String {
+        suspend fun uploadVideo(lessonId: Int, inputStream: InputStream, contentLength: Long): String {
             val key = "lessons/$lessonId.mp4"
-            println("[S3] Iniciando upload do vídeo: key=$key, tamanho=${videoBytes.size} bytes (%.1f MB)".format(videoBytes.size / 1_048_576.0))
+            println("[S3] Iniciando upload do vídeo: key=$key, tamanho=%.1f MB".format(contentLength / 1_048_576.0))
+            // Gravar no disco temporariamente para evitar OOM
+            val tmpFile = File.createTempFile("video_upload_$lessonId", ".mp4")
             try {
+                tmpFile.outputStream().use { out -> inputStream.copyTo(out, bufferSize = 8 * 1024 * 1024) }
+                println("[S3] Arquivo temporário gravado: ${tmpFile.length()} bytes")
                 s3Client.putObject(PutObjectRequest {
                     bucket = BUCKET_NAME
                     this.key = key
-                    body = ByteStream.fromBytes(videoBytes)
+                    body = ByteStream.fromFile(tmpFile)
                     contentType = "video/mp4"
                 })
                 println("[S3] ✅ Vídeo enviado com sucesso: $key")
@@ -37,7 +43,16 @@ class S3ApiClient {
             } catch (e: Exception) {
                 println("[S3] ❌ Erro no upload do vídeo: ${e.message}")
                 throw e
+            } finally {
+                tmpFile.delete()
             }
+        }
+
+        /**
+         * Faz upload de um vídeo MP4 para o S3 a partir de bytes (mantido para compatibilidade).
+         */
+        suspend fun uploadVideo(lessonId: Int, videoBytes: ByteArray): String {
+            return uploadVideo(lessonId, videoBytes.inputStream(), videoBytes.size.toLong())
         }
 
         /**
