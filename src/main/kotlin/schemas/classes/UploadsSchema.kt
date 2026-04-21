@@ -53,9 +53,9 @@ class UploadService(private val database: Database) {
         val updatedAt  = varchar("updatedAt", length = 50)
 
         // Colunas legadas para compatibilidade
-        val fileName  = varchar("fileName", length = 50).nullable()
-        val fileCode  = varchar("fileCode", length = 50).nullable()
-        val classCode = varchar("classCode", length = 50).nullable()
+        val fileName  = varchar("fileName", length = 512).nullable()
+        val fileCode  = varchar("fileCode", length = 100).nullable()
+        val classCode = varchar("classCode", length = 100).nullable()
         val fileType  = varchar("fileType", length = 50).nullable()
 
         override val primaryKey = PrimaryKey(id)
