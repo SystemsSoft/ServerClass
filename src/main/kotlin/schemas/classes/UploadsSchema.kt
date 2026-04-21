@@ -150,6 +150,16 @@ class UploadService(private val database: Database) {
     }
 
     /**
+     * Retorna o registro completo por id, ou null se não encontrado.
+     */
+    suspend fun getById(id: Int): UploadListDto? = dbQuery {
+        FilesTable.selectAll()
+            .where { FilesTable.id eq id }
+            .singleOrNull()
+            ?.let(::toDto)
+    }
+
+    /**
      * Retorna a S3 key do vídeo para o registro, ou null se não houver.
      */
     suspend fun getVideoKey(id: Int): String? = dbQuery {

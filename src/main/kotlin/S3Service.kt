@@ -21,11 +21,11 @@ class S3ApiClient {
 
         /**
          * Faz upload de um vídeo MP4 para o S3 usando Multipart Upload em chunks de 10 MB.
-         * Nunca carrega mais de um chunk na memória — resolve OOM no Heroku.
+         * A [s3Key] define o caminho completo no bucket (ex: "lessons/ENG101-ENG102/aula1.mp4").
          */
-        suspend fun uploadVideo(lessonId: Int, inputStream: InputStream, contentLength: Long = -1L): String {
-            val key = "lessons/$lessonId.mp4"
-            val chunkSize = 10 * 1024 * 1024 // 10 MB por part (mínimo S3 = 5 MB exceto último)
+        suspend fun uploadVideo(s3Key: String, inputStream: InputStream, contentLength: Long = -1L): String {
+            val key = s3Key
+            val chunkSize = 10 * 1024 * 1024
             println("[S3] Iniciando multipart upload: key=$key, tamanho=%.1f MB".format(contentLength / 1_048_576.0))
 
             val createResp = s3Client.createMultipartUpload(CreateMultipartUploadRequest {
@@ -92,8 +92,8 @@ class S3ApiClient {
         /**
          * Overload de compatibilidade para ByteArray.
          */
-        suspend fun uploadVideo(lessonId: Int, videoBytes: ByteArray): String {
-            return uploadVideo(lessonId, videoBytes.inputStream(), videoBytes.size.toLong())
+        suspend fun uploadVideo(s3Key: String, videoBytes: ByteArray): String {
+            return uploadVideo(s3Key, videoBytes.inputStream(), videoBytes.size.toLong())
         }
 
         /**

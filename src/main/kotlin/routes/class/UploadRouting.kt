@@ -89,6 +89,26 @@ fun Application.uploadRouting(uploadsService: UploadService) {
             println("[VIDEO]   Content-Type: ${call.request.contentType()}")
             println("[VIDEO]   Content-Length: ${call.request.headers["Content-Length"] ?: "não informado"} bytes")
 
+            // Busca o registro para montar a key com classCodes + videoName
+            val record = uploadsService.getById(id)
+                ?: return@post call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
+
+            // Ex: "ENG101-ENG102" ou "ENG101"
+            val codesSegment = record.classCodes
+                .filter { it.isNotBlank() }
+                .joinToString("-") { it.trim() }
+                .ifBlank { "sem-classe" }
+
+            // Ex: "aula-introducao" (sanitiza espaços/caracteres especiais)
+            val nameSegment = (record.videoName ?: record.title)
+                .trim()
+                .replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+                .take(100)
+
+            // Key final: lessons/ENG101-ENG102/aula-introducao.mp4
+            val s3Key = "lessons/$codesSegment/$nameSegment.mp4"
+            println("[VIDEO]   S3 key: $s3Key")
+
             try {
                 if (call.request.contentType().match(ContentType.MultiPart.FormData)) {
                     println("[VIDEO]   Modo: multipart/form-data")
@@ -98,12 +118,12 @@ fun Application.uploadRouting(uploadsService: UploadService) {
                         if (part is PartData.FileItem && !uploaded) {
                             println("[VIDEO]   Lendo part '${part.name}'...")
                             val contentLength = call.request.headers["Content-Length"]?.toLongOrNull() ?: -1L
-                            val s3Key = S3ApiClient.uploadVideo(id, part.streamProvider(), contentLength)
-                            println("[VIDEO]   Salvando key no banco: $s3Key")
-                            val saved = uploadsService.saveVideoKey(id, s3Key)
+                            val savedKey = S3ApiClient.uploadVideo(s3Key, part.streamProvider(), contentLength)
+                            println("[VIDEO]   Salvando key no banco: $savedKey")
+                            val saved = uploadsService.saveVideoKey(id, savedKey)
                             if (saved) {
-                                println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $s3Key")
-                                call.respond(HttpStatusCode.OK, mapOf("key" to s3Key))
+                                println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $savedKey")
+                                call.respond(HttpStatusCode.OK, mapOf("key" to savedKey))
                             } else {
                                 call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
                             }
@@ -120,12 +140,12 @@ fun Application.uploadRouting(uploadsService: UploadService) {
                     println("[VIDEO]   Modo: raw bytes")
                     val stream = call.receiveStream()
                     val contentLength = call.request.headers["Content-Length"]?.toLongOrNull() ?: -1L
-                    val s3Key = S3ApiClient.uploadVideo(id, stream, contentLength)
-                    println("[VIDEO]   Salvando key no banco: $s3Key")
-                    val saved = uploadsService.saveVideoKey(id, s3Key)
+                    val savedKey = S3ApiClient.uploadVideo(s3Key, stream, contentLength)
+                    println("[VIDEO]   Salvando key no banco: $savedKey")
+                    val saved = uploadsService.saveVideoKey(id, savedKey)
                     if (saved) {
-                        println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $s3Key")
-                        call.respond(HttpStatusCode.OK, mapOf("key" to s3Key))
+                        println("[VIDEO] ✅ Vídeo salvo no S3 para id=$id: $savedKey")
+                        call.respond(HttpStatusCode.OK, mapOf("key" to savedKey))
                     } else {
                         call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
                     }
