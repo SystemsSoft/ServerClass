@@ -28,7 +28,7 @@ fun Application.uploadRouting(uploadsService: UploadService) {
         post("/upload") {
             try {
                 val id = uploadsService.create(call.receive<UploadList>())
-                call.respond(HttpStatusCode.OK, id)
+                call.respond(HttpStatusCode.OK, mapOf("id" to id))
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.BadRequest, "Erro ao processar JSON: ${e.message}")
             }
