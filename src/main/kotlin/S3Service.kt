@@ -1,11 +1,9 @@
 package services
 
 import aws.sdk.kotlin.services.s3.S3Client
-import aws.sdk.kotlin.services.s3.model.GetObjectRequest
-import aws.sdk.kotlin.services.s3.model.PutObjectRequest
+import aws.sdk.kotlin.services.s3.model.*
 import aws.sdk.kotlin.services.s3.presigners.presignGetObject
 import aws.smithy.kotlin.runtime.content.ByteStream
-import java.io.File
 import java.io.InputStream
 import java.util.Base64
 import kotlin.time.Duration.Companion.hours
@@ -22,34 +20,77 @@ class S3ApiClient {
         }
 
         /**
-         * Faz upload de um vídeo MP4 para o S3 a partir de um InputStream (sem carregar tudo na RAM).
+         * Faz upload de um vídeo MP4 para o S3 usando Multipart Upload em chunks de 10 MB.
+         * Nunca carrega mais de um chunk na memória — resolve OOM no Heroku.
          */
-        suspend fun uploadVideo(lessonId: Int, inputStream: InputStream, contentLength: Long): String {
+        suspend fun uploadVideo(lessonId: Int, inputStream: InputStream, contentLength: Long = -1L): String {
             val key = "lessons/$lessonId.mp4"
-            println("[S3] Iniciando upload do vídeo: key=$key, tamanho=%.1f MB".format(contentLength / 1_048_576.0))
-            // Gravar no disco temporariamente para evitar OOM
-            val tmpFile = File.createTempFile("video_upload_$lessonId", ".mp4")
+            val chunkSize = 10 * 1024 * 1024 // 10 MB por part (mínimo S3 = 5 MB exceto último)
+            println("[S3] Iniciando multipart upload: key=$key, tamanho=%.1f MB".format(contentLength / 1_048_576.0))
+
+            val createResp = s3Client.createMultipartUpload(CreateMultipartUploadRequest {
+                bucket = BUCKET_NAME
+                this.key = key
+                contentType = "video/mp4"
+            })
+            val uploadId = createResp.uploadId!!
+            println("[S3] uploadId=$uploadId")
+
+            val completedParts = mutableListOf<CompletedPart>()
+            var partNumber = 1
+            val buffer = ByteArray(chunkSize)
+
             try {
-                tmpFile.outputStream().use { out -> inputStream.copyTo(out, bufferSize = 8 * 1024 * 1024) }
-                println("[S3] Arquivo temporário gravado: ${tmpFile.length()} bytes")
-                s3Client.putObject(PutObjectRequest {
+                while (true) {
+                    var bytesRead = 0
+                    // Lê exatamente chunkSize bytes (ou menos no último chunk)
+                    while (bytesRead < chunkSize) {
+                        val n = inputStream.read(buffer, bytesRead, chunkSize - bytesRead)
+                        if (n == -1) break
+                        bytesRead += n
+                    }
+                    if (bytesRead == 0) break
+
+                    val chunk = buffer.copyOf(bytesRead)
+                    println("[S3]   Enviando part $partNumber (${bytesRead / 1024} KB)...")
+                    val uploadResp = s3Client.uploadPart(UploadPartRequest {
+                        bucket = BUCKET_NAME
+                        this.key = key
+                        this.uploadId = uploadId
+                        this.partNumber = partNumber
+                        body = ByteStream.fromBytes(chunk)
+                        this.contentLength = bytesRead.toLong()
+                    })
+                    completedParts += CompletedPart {
+                        this.partNumber = partNumber
+                        eTag = uploadResp.eTag
+                    }
+                    partNumber++
+                }
+
+                s3Client.completeMultipartUpload(CompleteMultipartUploadRequest {
                     bucket = BUCKET_NAME
                     this.key = key
-                    body = ByteStream.fromFile(tmpFile)
-                    contentType = "video/mp4"
+                    this.uploadId = uploadId
+                    multipartUpload = CompletedMultipartUpload { parts = completedParts }
                 })
-                println("[S3] ✅ Vídeo enviado com sucesso: $key")
+                println("[S3] ✅ Multipart upload concluído: $key (${partNumber - 1} parts)")
                 return key
             } catch (e: Exception) {
-                println("[S3] ❌ Erro no upload do vídeo: ${e.message}")
+                println("[S3] ❌ Erro no upload, abortando multipart: ${e.message}")
+                runCatching {
+                    s3Client.abortMultipartUpload(AbortMultipartUploadRequest {
+                        bucket = BUCKET_NAME
+                        this.key = key
+                        this.uploadId = uploadId
+                    })
+                }
                 throw e
-            } finally {
-                tmpFile.delete()
             }
         }
 
         /**
-         * Faz upload de um vídeo MP4 para o S3 a partir de bytes (mantido para compatibilidade).
+         * Overload de compatibilidade para ByteArray.
          */
         suspend fun uploadVideo(lessonId: Int, videoBytes: ByteArray): String {
             return uploadVideo(lessonId, videoBytes.inputStream(), videoBytes.size.toLong())
