@@ -32,6 +32,7 @@ class ClassesListService(private val database: Database) {
     init {
         transaction(database) {
             SchemaUtils.create(ClassTable)
+            SchemaUtils.createMissingTablesAndColumns(ClassTable)
         }
     }
 

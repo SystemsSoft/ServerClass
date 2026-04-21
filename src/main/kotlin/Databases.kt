@@ -18,12 +18,29 @@ import schemas.users.ClientService
 
 object DatabaseConfig {
 
+    private val host = "ls-83cb12ed62490b7f04b5b693968286e4df55d2a4.codoai20o7g2.us-east-1.rds.amazonaws.com"
+    private val dbUser = "dbmasteruser"
+    private val dbPassword = "dbmasteruser"
+
+    private fun criarBancoSeNaoExistir(dbName: String) {
+        val url = "jdbc:mysql://$host:3306/?maxAllowedPacket=629145600"
+        val conn = java.sql.DriverManager.getConnection(url, dbUser, dbPassword)
+        conn.use { c ->
+            c.createStatement().use { stmt ->
+                stmt.executeUpdate("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+                println("[DB] Banco '$dbName' verificado/criado com sucesso.")
+            }
+        }
+    }
+
     private fun conectarBanco(dbName: String, maxConexoes: Int): Database {
+        criarBancoSeNaoExistir(dbName)
+
         val config = HikariConfig().apply {
             // maxAllowedPacket=629145600 (~600 MB) na URL para garantir que o driver negocie corretamente
-            jdbcUrl = "jdbc:mysql://ls-4c09769be49b9f8b7ca900b4ecadba80d77c8a07.cq7sywsga5zr.us-east-1.rds.amazonaws.com:3306/$dbName?maxAllowedPacket=629145600"
-            username = "dbmasteruser"
-            password = "q1w2e3r4"
+            jdbcUrl = "jdbc:mysql://$host:3306/$dbName?maxAllowedPacket=629145600"
+            username = dbUser
+            password = dbPassword
             driverClassName = "com.mysql.cj.jdbc.Driver"
 
             // CONFIGURAÇÕES DE LIMITE
@@ -58,11 +75,7 @@ object DatabaseConfig {
     }
 
     val clientModule = module {
-        single(named("ClientDB")) {
-            conectarBanco("Users", maxConexoes = 1)
-        }
-
-        single { ClientService(get(named("ClientDB"))) }
+        single { ClientService(get(named("MainDB"))) }
     }
 
 

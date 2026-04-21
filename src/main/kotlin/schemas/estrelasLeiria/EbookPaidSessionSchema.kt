@@ -16,6 +16,7 @@ class EbookPaidSessionService(private val database: Database) {
     init {
         transaction(database) {
             SchemaUtils.create(EbookPaidSessionTable)
+            SchemaUtils.createMissingTablesAndColumns(EbookPaidSessionTable)
         }
     }
 

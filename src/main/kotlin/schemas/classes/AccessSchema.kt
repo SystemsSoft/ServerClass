@@ -42,6 +42,7 @@ class AccessService(private val database: Database) {
     init {
         transaction(database) {
             SchemaUtils.create(AccessTable)
+            SchemaUtils.createMissingTablesAndColumns(AccessTable)
         }
     }
 

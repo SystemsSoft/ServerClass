@@ -48,6 +48,7 @@ class ClientService(private val db: Database) {
     init {
         transaction(db) {
             SchemaUtils.create(ClientTable)
+            SchemaUtils.createMissingTablesAndColumns(ClientTable)
         }
     }
 

@@ -44,6 +44,7 @@ class VotoService(private val database: Database) {
     init {
         transaction(database) {
             SchemaUtils.create(VotoTable)
+            SchemaUtils.createMissingTablesAndColumns(VotoTable)
         }
     }
 

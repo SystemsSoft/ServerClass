@@ -32,6 +32,7 @@ class CategoriaService(private val database: Database) {
     init {
         transaction(database) {
             SchemaUtils.create(CategoriaTable)
+            SchemaUtils.createMissingTablesAndColumns(CategoriaTable)
         }
     }
 
