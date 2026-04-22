@@ -3,10 +3,12 @@ package services
 import aws.sdk.kotlin.services.s3.S3Client
 import aws.sdk.kotlin.services.s3.model.*
 import aws.sdk.kotlin.services.s3.presigners.presignGetObject
+import aws.sdk.kotlin.services.s3.presigners.presignPutObject
 import aws.smithy.kotlin.runtime.content.ByteStream
 import java.io.InputStream
 import java.util.Base64
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 class S3ApiClient {
 
@@ -106,6 +108,22 @@ class S3ApiClient {
                 this.key = key
             }
             val presigned = s3Client.presignGetObject(request, 1.hours)
+            return presigned.url.toString()
+        }
+
+        /**
+         * Gera uma URL pré-assinada para o cliente fazer PUT diretamente no S3.
+         * Válida por [expiryMinutes] minutos (padrão: 60).
+         * O cliente deve enviar o vídeo com Content-Type "video/mp4".
+         */
+        suspend fun generatePresignedUploadUrl(s3Key: String, expiryMinutes: Int = 60): String {
+            val request = PutObjectRequest {
+                bucket = BUCKET_NAME
+                key = s3Key
+                contentType = "video/mp4"
+            }
+            val presigned = s3Client.presignPutObject(request, expiryMinutes.minutes)
+            println("[S3] URL pré-assinada de upload gerada: key=$s3Key, validade=${expiryMinutes}min")
             return presigned.url.toString()
         }
 

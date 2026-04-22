@@ -87,6 +87,8 @@ fun Application.uploadRouting(uploadsService: UploadService) {
                 ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido.")
 
             println("[VIDEO] ▶ Iniciando upload para aula id=$id")
+            println("[VIDEO] ⚠️  ATENÇÃO: upload passando pelo backend (pode causar OutOfMemory no Heroku).")
+            println("[VIDEO]   Use GET /upload/video/$id/presign + POST /upload/video/$id/confirm para upload direto ao S3.")
             println("[VIDEO]   Content-Type: ${call.request.contentType()}")
             println("[VIDEO]   Content-Length: ${call.request.headers["Content-Length"] ?: "não informado"} bytes")
 
@@ -155,6 +157,76 @@ fun Application.uploadRouting(uploadsService: UploadService) {
                 println("[VIDEO] ❌ Exceção ao processar upload para id=$id: ${e::class.simpleName}: ${e.message}")
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao salvar vídeo: ${e.message}")
+            }
+        }
+
+        /**
+         * GET /upload/video/{id}/presign
+         * Gera e retorna uma URL pré-assinada para o cliente fazer PUT do vídeo
+         * diretamente no S3, sem passar pelo backend (evita OutOfMemory no Heroku).
+         *
+         * Fluxo recomendado:
+         *  1. Cliente chama este endpoint → recebe { uploadUrl, s3Key }
+         *  2. Cliente faz PUT direto para uploadUrl com o arquivo (Content-Type: video/mp4)
+         *  3. Cliente chama POST /upload/video/{id}/confirm para salvar a key no banco
+         */
+        get("/upload/video/{id}/presign") {
+            val id = call.parameters["id"]?.toIntOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest, "ID inválido.")
+
+            println("[VIDEO-PRESIGN] ▶ Gerando URL de upload para aula id=$id")
+            try {
+                val record = uploadsService.getById(id)
+                    ?: return@get call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
+
+                val codesSegment = record.classCodes
+                    .filter { it.isNotBlank() }
+                    .joinToString("-") { it.trim() }
+                    .ifBlank { "sem-classe" }
+
+                val nameSegment = (record.videoName ?: record.title)
+                    .trim()
+                    .replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+                    .take(100)
+
+                val s3Key = "lessons/$codesSegment/$nameSegment.mp4"
+                val uploadUrl = S3ApiClient.generatePresignedUploadUrl(s3Key)
+
+                println("[VIDEO-PRESIGN] ✅ URL gerada para id=$id, key=$s3Key")
+                call.respond(HttpStatusCode.OK, mapOf("uploadUrl" to uploadUrl, "s3Key" to s3Key))
+            } catch (e: Throwable) {
+                println("[VIDEO-PRESIGN] ❌ Exceção id=$id: ${e::class.simpleName}: ${e.message}")
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao gerar URL de upload: ${e.message}")
+            }
+        }
+
+        /**
+         * POST /upload/video/{id}/confirm
+         * Confirma que o upload direto para o S3 foi concluído e salva a key no banco.
+         * Body JSON: { "s3Key": "lessons/ENG101/aula-1.mp4" }
+         */
+        post("/upload/video/{id}/confirm") {
+            val id = call.parameters["id"]?.toIntOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido.")
+
+            println("[VIDEO-CONFIRM] ▶ Confirmando upload para aula id=$id")
+            try {
+                val body = call.receive<Map<String, String>>()
+                val s3Key = body["s3Key"]
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, "Campo 's3Key' é obrigatório.")
+
+                val saved = uploadsService.saveVideoKey(id, s3Key)
+                if (saved) {
+                    println("[VIDEO-CONFIRM] ✅ Key salva no banco para id=$id: $s3Key")
+                    call.respond(HttpStatusCode.OK, mapOf("key" to s3Key))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, "Aula com id=$id não encontrada.")
+                }
+            } catch (e: Throwable) {
+                println("[VIDEO-CONFIRM] ❌ Exceção id=$id: ${e::class.simpleName}: ${e.message}")
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao confirmar upload: ${e.message}")
             }
         }
 
