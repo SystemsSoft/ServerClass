@@ -108,12 +108,10 @@ class UploadService(private val database: Database) {
         FilesTable.selectAll().orderBy(FilesTable.createdAt, SortOrder.DESC).map(::toDto)
     }
 
-    suspend fun readFiltered(classCode: String, active: Boolean?): List<UploadListDto> = dbQuery {
-        var query = FilesTable.selectAll().where {
-            FilesTable.classCodes like "%\"$classCode\"%"
-        }
-        if (active != null) query = query.andWhere { FilesTable.active eq active }
-        query.orderBy(FilesTable.createdAt, SortOrder.DESC).map(::toDto)
+    suspend fun readFiltered(className: String): List<UploadListDto> = dbQuery {
+        FilesTable.selectAll().where {
+            FilesTable.classNames like "%\"$className\"%"
+        }.orderBy(FilesTable.createdAt, SortOrder.DESC).map(::toDto)
     }
 
     suspend fun update(id: Int, upload: UploadList) = dbQuery {
