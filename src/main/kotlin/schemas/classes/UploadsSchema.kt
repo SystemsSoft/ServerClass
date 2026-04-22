@@ -33,6 +33,12 @@ data class UploadListDto(
 )
 
 @Serializable
+data class UploadFilteredDto(
+    val title: String,
+    val videoName: String? = null,
+)
+
+@Serializable
 data class UploadDeleteRequest(
     val id: Int,
 )
@@ -108,10 +114,15 @@ class UploadService(private val database: Database) {
         FilesTable.selectAll().orderBy(FilesTable.createdAt, SortOrder.DESC).map(::toDto)
     }
 
-    suspend fun readFiltered(className: String): List<UploadListDto> = dbQuery {
+    suspend fun readFiltered(className: String): List<UploadFilteredDto> = dbQuery {
         FilesTable.selectAll().where {
             FilesTable.classNames like "%\"$className\"%"
-        }.orderBy(FilesTable.createdAt, SortOrder.DESC).map(::toDto)
+        }.orderBy(FilesTable.createdAt, SortOrder.DESC).map { row ->
+            UploadFilteredDto(
+                title     = row[FilesTable.title],
+                videoName = row[FilesTable.videoName],
+            )
+        }
     }
 
     suspend fun update(id: Int, upload: UploadList) = dbQuery {

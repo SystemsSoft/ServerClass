@@ -45,13 +45,12 @@ fun Application.uploadRouting(uploadsService: UploadService) {
 
         get("/upload/filter") {
             try {
-                val classCode = call.request.queryParameters["classCode"]
-                val active = call.request.queryParameters["active"]?.toBooleanStrictOrNull()
-                if (classCode == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Parâmetro 'classCode' é obrigatório.")
+                val className = call.request.queryParameters["className"]
+                if (className == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Parâmetro 'className' é obrigatório.")
                     return@get
                 }
-                call.respond(HttpStatusCode.OK, uploadsService.readFiltered(classCode, active))
+                call.respond(HttpStatusCode.OK, uploadsService.readFiltered(className))
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar uploads filtrados: ${e.message}")
             }
