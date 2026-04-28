@@ -18,12 +18,14 @@ import org.koin.logger.slf4jLogger
 import routes.`class`.accessRouting
 import routes.`class`.classesRouting
 import routes.users.clientRouting
+import routes.`class`.flashcardsRouting
 import routes.`class`.uploadRouting
 import routes.estrelasLeiria.categoriaRouting
 import routes.estrelasLeiria.indicadoRouting
 import routes.estrelasLeiria.stripeRouting
 import routes.estrelasLeiria.votoRouting
 import schemas.classes.ClassesListService
+import schemas.classes.FlashcardService
 import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
@@ -76,11 +78,13 @@ private fun Application.configureRouting() {
     val classesListService by inject<ClassesListService>()
     val uploadListService by inject<UploadService>()
     val clientService: ClientService by inject<ClientService>()
+    val flashcardService by inject<FlashcardService>()
 
     clientRouting(clientService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
     uploadRouting(uploadListService)
+    flashcardsRouting(flashcardService)
 }
 
 

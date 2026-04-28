@@ -8,6 +8,7 @@ import org.jetbrains.exposed.sql.Database
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import schemas.classes.ClassesListService
+import schemas.classes.FlashcardService
 import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.EbookPaidSessionService
 import schemas.estrelasLeiria.IndicadoService
@@ -74,6 +75,7 @@ object DatabaseConfig {
         single { AccessService(get(named("MainDB"))) }
         single { ClassesListService(get(named("MainDB"))) }
         single { UploadService(get(named("MainDB"))) }
+        single(createdAtStart = true) { FlashcardService(get(named("MainDB"))) }
     }
 
     val clientModule = module {
