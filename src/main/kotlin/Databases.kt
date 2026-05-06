@@ -16,6 +16,7 @@ import schemas.estrelasLeiria.VotoService
 import schemas.resolvebr.CadastroService
 import schemas.users.ClientService
 import schemas.inovacloudSchema.PhotoService
+import schemas.inovacloudSchema.VideoService
 
 
 object DatabaseConfig {
@@ -109,5 +110,6 @@ object DatabaseConfig {
         }
 
         single { PhotoService(get(named("InovaCloudDB"))) }
+        single { VideoService(get(named("InovaCloudDB"))) }
     }
 }

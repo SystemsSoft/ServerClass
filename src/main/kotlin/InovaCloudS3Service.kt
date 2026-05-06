@@ -60,6 +60,43 @@ class InovaCloudS3Client {
         }
 
         /**
+         * Faz upload de um vídeo (bytes brutos) para o S3 sob o prefixo "inovacloud/videos/{email}/".
+         * Retorna a URL pública do objeto salvo.
+         */
+        suspend fun uploadVideoFile(fileId: String, bytes: ByteArray, mimeType: String, originalFileName: String, userEmail: String): String {
+            val extension = when {
+                mimeType.contains("mp4")       -> "mp4"
+                mimeType.contains("quicktime") -> "mov"
+                mimeType.contains("webm")      -> "webm"
+                mimeType.contains("avi")       -> "avi"
+                mimeType.contains("mpeg")      -> "mpeg"
+                else -> originalFileName.substringAfterLast('.', "mp4").lowercase().take(5).ifBlank { "mp4" }
+            }
+            val safeEmail = sanitizeEmail(userEmail)
+            val s3Key = "inovacloud/videos/$safeEmail/$fileId.$extension"
+            s3Client.putObject(PutObjectRequest {
+                bucket = BUCKET_NAME
+                key = s3Key
+                body = ByteStream.fromBytes(bytes)
+                contentType = mimeType
+            })
+            println("[InovaCloud S3] ✅ Vídeo salvo: $s3Key (owner: $userEmail)")
+            return "$BASE_URL/$s3Key"
+        }
+
+        /**
+         * Remove um vídeo do bucket inova-cloud, validando que a key pertence ao userEmail.
+         */
+        suspend fun deleteVideoObject(s3Key: String, userEmail: String) {
+            validateOwnership(s3Key, userEmail)
+            s3Client.deleteObject(DeleteObjectRequest {
+                bucket = BUCKET_NAME
+                key = s3Key
+            })
+            println("[InovaCloud S3] 🗑️ Vídeo removido: $s3Key (owner: $userEmail)")
+        }
+
+        /**
          * Faz upload de uma imagem em Base64 para o S3 sob o prefixo "indicados/{email}/".
          * Retorna a URL pública do objeto salvo.
          */

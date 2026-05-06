@@ -38,7 +38,9 @@ import routes.estrelasLeiria.cortesiaRouting
 import routes.estrelasLeiria.ebookWebhookRouting
 import routes.resolvebr.cadastroRouting
 import routes.inovacloudRoute.photoRouting
+import routes.inovacloudRoute.videoRouting
 import schemas.inovacloudSchema.PhotoService
+import schemas.inovacloudSchema.VideoService
 import schemas.resolvebr.CadastroService
 
 fun main(args: Array<String>) {
@@ -124,8 +126,10 @@ private fun Application.configureRoutingResolveBr() {
 
 private fun Application.configureRoutingInovaCloud() {
     val photoService by inject<PhotoService>()
+    val videoService by inject<VideoService>()
 
     photoRouting(photoService)
+    videoRouting(videoService)
 }
 
 
