@@ -12,7 +12,6 @@ import io.ktor.server.routing.*
 import schemas.inovacloudSchema.PhotoService
 import schemas.inovacloudSchema.PhotoUpdateRequest
 import services.InovaCloudS3Client
-import services.S3ApiClient
 import java.util.UUID
 
 fun Application.photoRouting(photoService: PhotoService) {
@@ -65,7 +64,7 @@ fun Application.photoRouting(photoService: PhotoService) {
                     )
 
                     // Derive the s3Key from the URL
-                    val bucketBase = "https://repo-english-class.s3.us-east-2.amazonaws.com/"
+                    val bucketBase = "https://inova-cloud.s3.us-east-2.amazonaws.com/"
                     val s3Key = url.removePrefix(bucketBase)
 
                     val dto = photoService.create(
