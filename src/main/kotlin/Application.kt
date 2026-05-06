@@ -6,6 +6,7 @@ import com.class_erp.DatabaseConfig.classModule
 import com.class_erp.DatabaseConfig.clientModule
 import com.class_erp.DatabaseConfig.estrelasLeiria
 import com.class_erp.DatabaseConfig.resolvebr
+import com.class_erp.DatabaseConfig.inovaCloud
 import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
@@ -36,6 +37,8 @@ import routes.estrelasLeiria.adminTicketRouting
 import routes.estrelasLeiria.cortesiaRouting
 import routes.estrelasLeiria.ebookWebhookRouting
 import routes.resolvebr.cadastroRouting
+import routes.inovacloudRoute.photoRouting
+import schemas.inovacloudSchema.PhotoService
 import schemas.resolvebr.CadastroService
 
 fun main(args: Array<String>) {
@@ -49,6 +52,7 @@ fun Application.module() {
     configureRouting()
     configureRoutingEstrelasLeiria()
     configureRoutingResolveBr()
+    configureRoutingInovaCloud()
 }
 
 fun Application.configureContentNegotiation() {
@@ -69,6 +73,7 @@ private fun Application.configureDependencyInjection() {
             clientModule,
             estrelasLeiria,
             resolvebr,
+            inovaCloud,
         )
     }
 }
@@ -115,6 +120,12 @@ private fun Application.configureRoutingResolveBr() {
     val cadastroService by inject<CadastroService>()
 
     cadastroRouting(cadastroService)
+}
+
+private fun Application.configureRoutingInovaCloud() {
+    val photoService by inject<PhotoService>()
+
+    photoRouting(photoService)
 }
 
 

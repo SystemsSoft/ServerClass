@@ -15,6 +15,7 @@ import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
 import schemas.resolvebr.CadastroService
 import schemas.users.ClientService
+import schemas.inovacloudSchema.PhotoService
 
 
 object DatabaseConfig {
@@ -100,5 +101,13 @@ object DatabaseConfig {
         }
 
         single { CadastroService(get(named("ResolveBrDB"))) }
+    }
+
+    val inovaCloud = module {
+        single(named("InovaCloudDB")) {
+            conectarBanco("inova_cloud_db", maxConexoes = 5)
+        }
+
+        single { PhotoService(get(named("InovaCloudDB"))) }
     }
 }
