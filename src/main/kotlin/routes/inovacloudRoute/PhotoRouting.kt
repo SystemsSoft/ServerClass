@@ -61,6 +61,7 @@ fun Application.photoRouting(photoService: PhotoService) {
                         bytes = bytes,
                         mimeType = mimeType,
                         originalFileName = fileName ?: "photo",
+                        userEmail = resolvedEmail,
                     )
 
                     // Derive the s3Key from the URL
@@ -183,7 +184,7 @@ fun Application.photoRouting(photoService: PhotoService) {
                             mapOf("message" to "Foto $id não encontrada ou não pertence a este usuário.")
                         )
 
-                    runCatching { InovaCloudS3Client.deleteObject(s3Key) }
+                    runCatching { InovaCloudS3Client.deleteObject(s3Key, email) }
                         .onFailure { println("[PHOTOS] ⚠️ Falha ao remover S3 key=$s3Key: ${it.message}") }
 
                     call.respond(HttpStatusCode.OK, mapOf("message" to "Foto $id removida com sucesso."))

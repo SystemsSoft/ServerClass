@@ -4,5 +4,4 @@ ktor:
             - com.class_erp.ApplicationKt.module
     deployment:
         host: 0.0.0.0
-        port: 8080
         maxRequestBodySize: 629145600  # 600 MB em bytes
