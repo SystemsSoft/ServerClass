@@ -6,7 +6,6 @@ import aws.sdk.kotlin.services.s3.presigners.presignGetObject
 import aws.sdk.kotlin.services.s3.presigners.presignPutObject
 import aws.smithy.kotlin.runtime.content.ByteStream
 import java.io.InputStream
-import java.util.Base64
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
@@ -127,92 +126,5 @@ class S3ApiClient {
             return presigned.url.toString()
         }
 
-        /**
-         * Faz upload de uma foto (bytes brutos) para o S3 sob o prefixo "inovacloud/photos/".
-         * Retorna a URL pública do objeto salvo.
-         */
-        suspend fun uploadPhotoFile(fileId: String, bytes: ByteArray, mimeType: String, originalFileName: String): String {
-            val extension = when {
-                mimeType.contains("png")  -> "png"
-                mimeType.contains("webp") -> "webp"
-                mimeType.contains("gif")  -> "gif"
-                else -> originalFileName.substringAfterLast('.', "jpg").lowercase().take(5).ifBlank { "jpg" }
-            }
-            val s3Key = "inovacloud/photos/$fileId.$extension"
-            s3Client.putObject(PutObjectRequest {
-                bucket = BUCKET_NAME
-                key = s3Key
-                body = ByteStream.fromBytes(bytes)
-                contentType = mimeType
-            })
-            println("[S3] ✅ Foto salva: $s3Key")
-            return "$BASE_URL/$s3Key"
-        }
-
-        /**
-         * Remove um objeto do S3 pela sua key.
-         */
-        suspend fun deleteObject(s3Key: String) {
-            s3Client.deleteObject(DeleteObjectRequest {
-                bucket = BUCKET_NAME
-                key = s3Key
-            })
-            println("[S3] 🗑️ Objeto removido: $s3Key")
-        }
-
-        suspend fun uploadImage(fileId: String, base64Raw: String): String {
-            try {
-                // 1. Detectar o MIME Type (Content-Type) e a Extensão
-                var mimeType = "image/jpeg" // Padrão
-                var extension = "jpg"
-                var base64Data = base64Raw
-
-                if (base64Raw.contains(",")) {
-                    val parts = base64Raw.split(",")
-                    val header = parts[0] // ex: "data:image/png;base64"
-                    base64Data = parts[1] // O conteúdo real
-
-                    when {
-                        header.contains("image/png") -> {
-                            mimeType = "image/png"
-                            extension = "png"
-                        }
-                        header.contains("image/webp") -> {
-                            mimeType = "image/webp"
-                            extension = "webp"
-                        }
-                        header.contains("image/gif") -> {
-                            mimeType = "image/gif"
-                            extension = "gif"
-                        }
-                        // Adicione outros se precisar
-                    }
-                }
-
-                // 2. Decodificar
-                val imageBytes = Base64.getDecoder().decode(base64Data)
-
-                // 3. Montar o nome final com a extensão correta
-                val finalKeyName = "indicados/$fileId.$extension"
-
-                // 4. Preparar Requisição com o Content-Type Dinâmico
-                val request = PutObjectRequest {
-                    bucket = BUCKET_NAME
-                    key = finalKeyName
-                    body = ByteStream.fromBytes(imageBytes)
-                    contentType = mimeType // <--- AQUI ESTÁ A MUDANÇA
-                }
-
-                // 5. Enviar
-                s3Client.putObject(request)
-
-                // 6. Retornar URL
-                return "$BASE_URL/$finalKeyName"
-
-            } catch (e: Exception) {
-                println("Erro no upload S3: ${e.message}")
-                throw e
-            }
-        }
     }
 }

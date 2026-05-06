@@ -11,6 +11,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.*
 import schemas.inovacloudSchema.PhotoService
 import schemas.inovacloudSchema.PhotoUpdateRequest
+import services.InovaCloudS3Client
 import services.S3ApiClient
 import java.util.UUID
 
@@ -56,7 +57,7 @@ fun Application.photoRouting(photoService: PhotoService) {
                         )
 
                     val id = UUID.randomUUID().toString()
-                    val url = S3ApiClient.uploadPhotoFile(
+                    val url = InovaCloudS3Client.uploadPhotoFile(
                         fileId = id,
                         bytes = bytes,
                         mimeType = mimeType,
@@ -183,7 +184,7 @@ fun Application.photoRouting(photoService: PhotoService) {
                             mapOf("message" to "Foto $id não encontrada ou não pertence a este usuário.")
                         )
 
-                    runCatching { S3ApiClient.deleteObject(s3Key) }
+                    runCatching { InovaCloudS3Client.deleteObject(s3Key) }
                         .onFailure { println("[PHOTOS] ⚠️ Falha ao remover S3 key=$s3Key: ${it.message}") }
 
                     call.respond(HttpStatusCode.OK, mapOf("message" to "Foto $id removida com sucesso."))

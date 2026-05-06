@@ -34,19 +34,19 @@ fun Application.indicadoRouting(indicadoService: IndicadoService) {
                     // 1. UPLOAD PARA O S3
                     // ---------------------------------------------------------
                     // Passamos o ID gerado e o Base64. A função retorna a URL pública.
-                    val urlS3 = S3ApiClient.uploadImage(generatedId, novoIndicado.imageData)
+                   // val urlS3 = S3ApiClient.uploadImage(generatedId, novoIndicado.imageData)
 
                     // ---------------------------------------------------------
                     // 2. SUBSTITUI O BASE64 PELA URL
                     // ---------------------------------------------------------
-                    val indicadoComUrl = novoIndicado.copy(imageData = urlS3)
+                //    val indicadoComUrl = novoIndicado.copy(imageData = urlS3)
 
                     // ---------------------------------------------------------
                     // 3. SALVA NO BANCO (Agora leve, só com texto)
                     // ---------------------------------------------------------
-                    val id = indicadoService.create(indicadoComUrl, generatedId)
+                   // val id = indicadoService.create(indicadoComUrl, generatedId)
 
-                    call.respond(HttpStatusCode.Created, id)
+                 //   call.respond(HttpStatusCode.Created, id)
 
                 } catch (e: Exception) {
                     e.printStackTrace() // Log no console do servidor

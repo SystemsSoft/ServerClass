@@ -354,7 +354,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
 
                 // 2. Faz o Upload da imagem (Base64) para o S3
                 // O método detecta a extensão e retorna a URL pública
-                val s3Url = S3ApiClient.uploadImage(fileId, dto.imageData)
+               // val s3Url = S3ApiClient.uploadImage(fileId, dto.imageData)
 
                 // 3. Salva no banco com a URL
                 val novoId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
@@ -363,7 +363,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                         it[instagram] = dto.instagram
                         it[categoriaId] = dto.categoriaId
                         it[descricao] = dto.descricaoDetalhada
-                        it[imageData] = s3Url // <-- Salva a URL em vez do Base64
+                   //     it[imageData] = s3Url // <-- Salva a URL em vez do Base64
                         it[desejaParticiparVotacao] = dto.desejaParticiparVotacao
                         it[quantidade] = 1
                         it[status] = "AGUARDANDO"
