@@ -28,7 +28,17 @@ fun Application.configureHTTP() {
         allowHeader("MyCustomHeader")
         allowHeader("Stripe-Signature")
 
-        anyHost()
+        // Origens permitidas
+        allowHost("athennaclass.netlify.app")
+        allowHost("athennaclass.netlify.app:443")
+        allowHost("athennaclass.netlify.app:*")
+        allowHost("localhost:3000")
+        allowHost("localhost:8080")
+        allowHost("127.0.0.1:3000")
+        allowHost("127.0.0.1:8080")
+
+        // Para desenvolvimento, descomente a linha abaixo (não use em produção)
+        // anyHost()
 
         allowCredentials = true
     }
