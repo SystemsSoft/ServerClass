@@ -30,8 +30,7 @@ fun Application.configureHTTP() {
 
         // Origens permitidas
         allowHost("athennaclass.netlify.app")
-        allowHost("athennaclass.netlify.app:443")
-        allowHost("athennaclass.netlify.app:*")
+        allowHost("athennaclass.netlify.app", schemes = listOf("https", "http"))
         allowHost("localhost:3000")
         allowHost("localhost:8080")
         allowHost("127.0.0.1:3000")
