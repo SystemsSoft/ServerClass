@@ -13,10 +13,7 @@ import schemas.estrelasLeiria.CategoriaService
 import schemas.estrelasLeiria.EbookPaidSessionService
 import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
-import schemas.resolvebr.CadastroService
 import schemas.users.ClientService
-import schemas.inovacloudSchema.PhotoService
-import schemas.inovacloudSchema.VideoService
 
 
 object DatabaseConfig {
@@ -96,20 +93,7 @@ object DatabaseConfig {
         single { EbookPaidSessionService(get(named("EstrelasLeiriaDB"))) }
     }
 
-    val resolvebr = module {
-        single(named("ResolveBrDB")) {
-            conectarBanco("resolvebr", maxConexoes = 5)
-        }
+    val resolvebr = module {}
 
-        single { CadastroService(get(named("ResolveBrDB"))) }
-    }
-
-    val inovaCloud = module {
-        single(named("InovaCloudDB")) {
-            conectarBanco("inova_cloud_db", maxConexoes = 5)
-        }
-
-        single { PhotoService(get(named("InovaCloudDB"))) }
-        single { VideoService(get(named("InovaCloudDB"))) }
-    }
+    val inovaCloud = module {}
 }
