@@ -36,12 +36,7 @@ import org.koin.core.qualifier.named
 import routes.estrelasLeiria.adminTicketRouting
 import routes.estrelasLeiria.cortesiaRouting
 import routes.estrelasLeiria.ebookWebhookRouting
-import routes.resolvebr.cadastroRouting
-import routes.inovacloudRoute.photoRouting
-import routes.inovacloudRoute.videoRouting
-import schemas.inovacloudSchema.PhotoService
-import schemas.inovacloudSchema.VideoService
-import schemas.resolvebr.CadastroService
+
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
@@ -53,8 +48,6 @@ fun Application.module() {
     configureDependencyInjection()
     configureRouting()
     configureRoutingEstrelasLeiria()
-    configureRoutingResolveBr()
-    configureRoutingInovaCloud()
 }
 
 fun Application.configureContentNegotiation() {
@@ -118,19 +111,7 @@ private fun Application.configureRoutingEstrelasLeiria() {
     )
 }
 
-private fun Application.configureRoutingResolveBr() {
-    val cadastroService by inject<CadastroService>()
 
-    cadastroRouting(cadastroService)
-}
-
-private fun Application.configureRoutingInovaCloud() {
-    val photoService by inject<PhotoService>()
-    val videoService by inject<VideoService>()
-
-    photoRouting(photoService)
-    videoRouting(videoService)
-}
 
 
 
