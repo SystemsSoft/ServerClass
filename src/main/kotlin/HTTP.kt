@@ -38,7 +38,7 @@ fun Application.configureHTTP() {
         allowHost("127.0.0.1:8080")
 
         // Para desenvolvimento, descomente a linha abaixo (não use em produção)
-        // anyHost()
+         anyHost()
 
         allowCredentials = true
     }
