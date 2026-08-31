@@ -20,9 +20,9 @@ import services.GeminiLiveBridge
 
 object DatabaseConfig {
 
-    private val host = "ls-83cb12ed62490b7f04b5b693968286e4df55d2a4.codoai20o7g2.us-east-1.rds.amazonaws.com"
-    private val dbUser = "dbmasteruser"
-    private val dbPassword = "dbmasteruser"
+    private val host = System.getProperty("db.host") ?: System.getenv("DB_HOST") ?: "ls-83cb12ed62490b7f04b5b693968286e4df55d2a4.codoai20o7g2.us-east-1.rds.amazonaws.com"
+    private val dbUser = System.getProperty("db.user") ?: System.getenv("DB_USER") ?: "dbmasteruser"
+    private val dbPassword = System.getProperty("db.password") ?: System.getenv("DB_PASSWORD") ?: "dbmasteruser"
 
     private fun criarBancoSeNaoExistir(dbName: String) {
         Class.forName("com.mysql.cj.jdbc.Driver")
