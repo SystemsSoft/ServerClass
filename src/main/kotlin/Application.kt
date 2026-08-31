@@ -22,6 +22,8 @@ import routes.users.clientRouting
 import routes.`class`.flashcardsRouting
 import routes.`class`.uploadRouting
 import routes.alunoIa.alunoIaRouting
+import routes.alunoIa.meganRouting
+import services.GeminiLiveBridge
 import routes.estrelasLeiria.categoriaRouting
 import routes.estrelasLeiria.indicadoRouting
 import routes.estrelasLeiria.stripeRouting
@@ -42,16 +44,13 @@ import java.io.File
 import java.util.Properties
 
 
-fun main(args: Array<String>) {
-    loadAwsCredentials()
-    io.ktor.server.netty.EngineMain.main(args)
-}
-
 /**
- * Carrega as credenciais AWS do arquivo aws-credentials.properties e as define como propriedades do sistema.
+ * Carrega um arquivo .properties local (nunca versionado) e define suas chaves como
+ * propriedades do sistema. Usado em desenvolvimento; em produção as mesmas chaves
+ * chegam via variável de ambiente, sem precisar deste arquivo.
  */
-fun loadAwsCredentials() {
-    val propertiesFile = File("aws-credentials.properties")
+fun loadLocalSecrets(fileName: String) {
+    val propertiesFile = File(fileName)
     if (propertiesFile.exists()) {
         try {
             val properties = Properties()
@@ -61,17 +60,20 @@ fun loadAwsCredentials() {
                 System.setProperty(key.toString(), value.toString())
             }
 
-            println("[AWS] Credenciais carregadas do arquivo aws-credentials.properties")
+            println("[Config] Credenciais carregadas do arquivo $fileName")
         } catch (e: Exception) {
-            println("[AWS] Erro ao carregar credenciais: ${e.message}")
+            println("[Config] Erro ao carregar $fileName: ${e.message}")
         }
     } else {
-        println("[AWS] Arquivo aws-credentials.properties não encontrado, usando variáveis de ambiente ou valores padrão")
+        println("[Config] Arquivo $fileName não encontrado, usando variáveis de ambiente ou valores padrão")
     }
 }
 
 fun Application.module() {
+    loadLocalSecrets("aws-credentials.properties")
+    loadLocalSecrets("gemini-credentials.properties")
     configureHTTP()
+    configureSockets()
     configureContentNegotiation()
     configureDependencyInjection()
     configureRouting()
@@ -108,6 +110,7 @@ private fun Application.configureRouting() {
     val clientService: ClientService by inject<ClientService>()
     val flashcardService by inject<FlashcardService>()
     val alunoIaService by inject<AlunoIaService>()
+    val geminiLiveBridge by inject<GeminiLiveBridge>()
 
     clientRouting(clientService)
     accessRouting(serviceAccess)
@@ -115,6 +118,7 @@ private fun Application.configureRouting() {
     uploadRouting(uploadListService)
     flashcardsRouting(flashcardService)
     alunoIaRouting(alunoIaService)
+    meganRouting(alunoIaService, geminiLiveBridge)
 }
 
 

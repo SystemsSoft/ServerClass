@@ -37,4 +37,5 @@ out/
 
 ### Local config / secrets ###
 aws-credentials.properties
+gemini-credentials.properties
 local.properties
