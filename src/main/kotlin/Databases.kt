@@ -7,6 +7,7 @@ import com.zaxxer.hikari.HikariDataSource
 import org.jetbrains.exposed.sql.Database
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import schemas.alunoIa.AlunoIaService
 import schemas.classes.ClassesListService
 import schemas.classes.FlashcardService
 import schemas.estrelasLeiria.CategoriaService
@@ -75,6 +76,7 @@ object DatabaseConfig {
         single { ClassesListService(get(named("MainDB"))) }
         single { UploadService(get(named("MainDB"))) }
         single(createdAtStart = true) { FlashcardService(get(named("MainDB"))) }
+        single { AlunoIaService(get(named("MainDB"))) }
     }
 
     val clientModule = module {

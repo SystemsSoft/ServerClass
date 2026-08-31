@@ -5,6 +5,8 @@ import aws.sdk.kotlin.services.s3.model.*
 import aws.sdk.kotlin.services.s3.presigners.presignGetObject
 import aws.sdk.kotlin.services.s3.presigners.presignPutObject
 import aws.smithy.kotlin.runtime.content.ByteStream
+import aws.sdk.kotlin.runtime.auth.credentials.StaticCredentialsProvider
+import aws.smithy.kotlin.runtime.auth.awscredentials.Credentials
 import java.io.InputStream
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -12,12 +14,34 @@ import kotlin.time.Duration.Companion.minutes
 class S3ApiClient {
 
     companion object {
-        private const val REGION = "us-east-2" // Ajuste sua região
-        private const val BUCKET_NAME = "repo-english-class"
-        private const val BASE_URL = "https://$BUCKET_NAME.s3.$REGION.amazonaws.com"
+        // Busca as credenciais de variáveis de ambiente ou propriedades do sistema
+        private val AWS_ACCESS_KEY_ID = System.getProperty("aws.accessKeyId")
+            ?: System.getenv("AWS_ACCESS_KEY_ID")
+            ?: error("AWS_ACCESS_KEY_ID não configurada (system property aws.accessKeyId ou variável de ambiente)")
+
+        private val AWS_SECRET_ACCESS_KEY = System.getProperty("aws.secretAccessKey")
+            ?: System.getenv("AWS_SECRET_ACCESS_KEY")
+            ?: error("AWS_SECRET_ACCESS_KEY não configurada (system property aws.secretAccessKey ou variável de ambiente)")
+
+        private val REGION = System.getProperty("aws.region")
+            ?: System.getenv("AWS_REGION")
+            ?: "us-east-2"
+
+        private val BUCKET_NAME = System.getProperty("aws.bucketName")
+            ?: System.getenv("AWS_BUCKET_NAME")
+            ?: "repo-english-class"
+
 
         private val s3Client by lazy {
-            S3Client { region = REGION }
+            S3Client {
+                region = REGION
+                credentialsProvider = StaticCredentialsProvider(
+                    Credentials(
+                        accessKeyId = AWS_ACCESS_KEY_ID,
+                        secretAccessKey = AWS_SECRET_ACCESS_KEY
+                    )
+                )
+            }
         }
 
         /**
@@ -124,6 +148,24 @@ class S3ApiClient {
             val presigned = s3Client.presignPutObject(request, expiryMinutes.minutes)
             println("[S3] URL pré-assinada de upload gerada: key=$s3Key, validade=${expiryMinutes}min")
             return presigned.url.toString()
+        }
+
+        /**
+         * Verifica se um objeto existe no S3.
+         * Retorna true se o objeto existe, false caso contrário.
+         */
+        suspend fun objectExists(s3Key: String): Boolean {
+            return try {
+                s3Client.headObject(HeadObjectRequest {
+                    bucket = BUCKET_NAME
+                    key = s3Key
+                })
+                println("[S3] ✅ Objeto existe: $s3Key")
+                true
+            } catch (e: Exception) {
+                println("[S3] ❌ Objeto não existe: $s3Key (${e.message})")
+                false
+            }
         }
 
     }

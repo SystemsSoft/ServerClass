@@ -34,3 +34,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Local config / secrets ###
+aws-credentials.properties
+local.properties

@@ -21,10 +21,12 @@ import routes.`class`.classesRouting
 import routes.users.clientRouting
 import routes.`class`.flashcardsRouting
 import routes.`class`.uploadRouting
+import routes.alunoIa.alunoIaRouting
 import routes.estrelasLeiria.categoriaRouting
 import routes.estrelasLeiria.indicadoRouting
 import routes.estrelasLeiria.stripeRouting
 import routes.estrelasLeiria.votoRouting
+import schemas.alunoIa.AlunoIaService
 import schemas.classes.ClassesListService
 import schemas.classes.FlashcardService
 import schemas.estrelasLeiria.CategoriaService
@@ -36,10 +38,36 @@ import org.koin.core.qualifier.named
 import routes.estrelasLeiria.adminTicketRouting
 import routes.estrelasLeiria.cortesiaRouting
 import routes.estrelasLeiria.ebookWebhookRouting
+import java.io.File
+import java.util.Properties
 
 
 fun main(args: Array<String>) {
+    loadAwsCredentials()
     io.ktor.server.netty.EngineMain.main(args)
+}
+
+/**
+ * Carrega as credenciais AWS do arquivo aws-credentials.properties e as define como propriedades do sistema.
+ */
+fun loadAwsCredentials() {
+    val propertiesFile = File("aws-credentials.properties")
+    if (propertiesFile.exists()) {
+        try {
+            val properties = Properties()
+            propertiesFile.inputStream().use { properties.load(it) }
+
+            properties.forEach { (key, value) ->
+                System.setProperty(key.toString(), value.toString())
+            }
+
+            println("[AWS] Credenciais carregadas do arquivo aws-credentials.properties")
+        } catch (e: Exception) {
+            println("[AWS] Erro ao carregar credenciais: ${e.message}")
+        }
+    } else {
+        println("[AWS] Arquivo aws-credentials.properties não encontrado, usando variáveis de ambiente ou valores padrão")
+    }
 }
 
 fun Application.module() {
@@ -79,12 +107,14 @@ private fun Application.configureRouting() {
     val uploadListService by inject<UploadService>()
     val clientService: ClientService by inject<ClientService>()
     val flashcardService by inject<FlashcardService>()
+    val alunoIaService by inject<AlunoIaService>()
 
     clientRouting(clientService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
     uploadRouting(uploadListService)
     flashcardsRouting(flashcardService)
+    alunoIaRouting(alunoIaService)
 }
 
 

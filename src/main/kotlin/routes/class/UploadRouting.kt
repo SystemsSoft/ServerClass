@@ -215,6 +215,18 @@ fun Application.uploadRouting(uploadsService: UploadService) {
                 val s3Key = body["s3Key"]
                     ?: return@post call.respond(HttpStatusCode.BadRequest, "Campo 's3Key' é obrigatório.")
 
+                // Verifica se o arquivo realmente existe no S3 antes de salvar no banco
+                println("[VIDEO-CONFIRM] ⏳ Verificando existência do arquivo no S3: $s3Key")
+                val exists = S3ApiClient.objectExists(s3Key)
+                if (!exists) {
+                    println("[VIDEO-CONFIRM] ❌ Arquivo não encontrado no S3 para id=$id: $s3Key")
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Arquivo não encontrado no S3. O upload pode não ter sido concluído ou falhou.")
+                    )
+                    return@post
+                }
+
                 val saved = uploadsService.saveVideoKey(id, s3Key)
                 if (saved) {
                     println("[VIDEO-CONFIRM] ✅ Key salva no banco para id=$id: $s3Key")
