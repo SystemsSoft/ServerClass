@@ -23,6 +23,7 @@ import routes.`class`.flashcardsRouting
 import routes.`class`.uploadRouting
 import routes.alunoIa.alunoIaRouting
 import routes.alunoIa.meganRouting
+import routes.alunoIa.translateRouting
 import services.GeminiLiveBridge
 import routes.estrelasLeiria.categoriaRouting
 import routes.estrelasLeiria.indicadoRouting
@@ -119,6 +120,7 @@ private fun Application.configureRouting() {
     flashcardsRouting(flashcardService)
     alunoIaRouting(alunoIaService)
     meganRouting(alunoIaService, geminiLiveBridge)
+    translateRouting()
 }
 
 

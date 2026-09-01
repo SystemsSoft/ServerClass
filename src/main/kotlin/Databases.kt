@@ -16,6 +16,7 @@ import schemas.estrelasLeiria.IndicadoService
 import schemas.estrelasLeiria.VotoService
 import schemas.users.ClientService
 import services.GeminiLiveBridge
+import services.GeminiTranslationService
 
 
 object DatabaseConfig {
@@ -79,6 +80,7 @@ object DatabaseConfig {
         single(createdAtStart = true) { FlashcardService(get(named("MainDB"))) }
         single { AlunoIaService(get(named("MainDB"))) }
         single { GeminiLiveBridge() }
+        single { GeminiTranslationService() }
     }
 
     val clientModule = module {

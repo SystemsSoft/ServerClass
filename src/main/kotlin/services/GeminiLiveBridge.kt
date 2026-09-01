@@ -109,6 +109,8 @@ class GeminiLiveBridge {
                     addJsonObject { put("text", systemInstruction) }
                 }
             }
+            putJsonObject("inputAudioTranscription") {}
+            putJsonObject("outputAudioTranscription") {}
         }
     }
 }

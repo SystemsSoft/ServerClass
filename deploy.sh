@@ -1,5 +1,5 @@
 #!/bin/bash
-SERVER_IP="54.207.64.102"
+SERVER_IP="98.92.129.159"
 SERVER_USER="ec2-user"
 KEY_FILE="ssh-key.pem"
 JAR_FILE="build/libs/server-0.0.1.jar"
@@ -26,8 +26,9 @@ ssh -i $KEY_FILE $SERVER_USER@$SERVER_IP << 'EOF'
   sleep 2
   # -port=8080 é obrigatório: o EngineMain não le o application.yaml de dentro do fat jar,
   # so funciona sem essa flag quando rodado via ./gradlew run (classpath solto, nao jar).
-  nohup java -jar ~/server-0.0.1.jar -port=8080 > server.log 2>&1 &
-  disown
+  # setsid + stdin redirecionado: nohup sozinho (com disown) nao sobrevive de forma confiavel
+  # ao encerramento da sessao SSH nao interativa usada aqui.
+  cd ~ && setsid nohup java -jar server-0.0.1.jar -port=8080 < /dev/null > server.log 2>&1 &
   echo "Processo iniciado em background."
 
   echo "--- Verificando saude do servico ---"
