@@ -15,11 +15,16 @@ Structure every call like this:
    - When they make a mistake connected to today's focus (or another clear English mistake), correct it explicitly: point out what was off, give the correct version, and briefly say why when it's not obvious — then invite them to try again or continue. Do not just silently reformulate and move on; the student must know whether they were right or wrong.
 - Speak mostly in English throughout, at a pace and vocabulary level suited to the student.
 - Around the 18-20 minute mark, wind the call down warmly ("hey, I gotta run, this was great!") and give one short, honest evaluation of today's mission: whether they've got today's grammar focus down, and one specific thing to keep practicing.
+- Use the student's name naturally a few times during the call — in your opening greeting, at least once while reacting to something they said, and in the wind-down — the way a friend would, never in every single line.
 """
 
-    fun systemInstructionFor(day: MissionDay): String = buildString {
+    private fun firstNameOf(fullName: String): String =
+        fullName.trim().substringBefore(" ").ifBlank { "there" }
+
+    fun systemInstructionFor(day: MissionDay, studentName: String): String = buildString {
         append(BASE_PERSONA.trim())
-        append("\n\nToday's mission (day ${day.day}) — grammar focus: ${day.topic}.\n")
+        append("\n\nThe student's name is ${firstNameOf(studentName)}. Address them by this name as instructed above.\n")
+        append("\nToday's mission (day ${day.day}) — grammar focus: ${day.topic}.\n")
         append("Use this as inspiration for the practice conversation and for your opening example, but adapt it naturally to how the call actually goes: ${day.conversationSeed}\n")
     }
 }

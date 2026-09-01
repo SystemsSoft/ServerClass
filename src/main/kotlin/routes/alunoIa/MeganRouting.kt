@@ -42,7 +42,8 @@ fun Application.meganRouting(alunoIaService: AlunoIaService, geminiLiveBridge: G
             }.toString()))
 
             try {
-                geminiLiveBridge.bridge(this, MeganPersona.systemInstructionFor(day))
+                val studentName = aluno?.nome?.takeIf { it.isNotBlank() } ?: "there"
+                geminiLiveBridge.bridge(this, MeganPersona.systemInstructionFor(day, studentName))
             } catch (e: Exception) {
                 println("[Megan] Erro na sessão de $userId: ${e.message}")
                 runCatching {
