@@ -54,13 +54,12 @@ fun Application.meganRouting(alunoIaService: AlunoIaService, geminiLiveBridge: G
                 }
             } finally {
                 if (aluno != null) {
-                    // Marca a sessão do dia como concluída e libera o próximo desafio.
-                    // Revise esta regra se "concluir o dia" precisar de um critério mais forte
-                    // (ex.: duração mínima da chamada) do que apenas a conexão ter acontecido.
-                    val nextDay = (day.day + 1).coerceAtMost(MissionFluencyCurriculum.module1.size)
+                    // O avanço de missão não acontece mais aqui: o front-end chama
+                    // POST /aluno-ia/{userId}/avancar-missao quando o aluno sinaliza que
+                    // assistiu/concluiu o conteúdo do dia. Aqui só registramos o horário
+                    // da última sessão de chamada.
                     runCatching {
                         alunoIaService.update(userId, aluno.copy(
-                            missaoAtual = nextDay.toString(),
                             ultimaSessao = Instant.now().toString(),
                         ))
                     }

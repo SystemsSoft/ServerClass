@@ -11,6 +11,8 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
 import schemas.alunoIa.AlunoIaDto
 import schemas.alunoIa.AlunoIaService
+import schemas.alunoIa.MissionFluencyCurriculum
+import java.time.Instant
 
 fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
     routing {
@@ -74,6 +76,39 @@ fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
                 }
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao atualizar aluno: ${e.message}")
+            }
+        }
+
+        // ── POST /aluno-ia/{userId}/avancar-missao ───────────────────────────
+        // Chamado pelo front-end quando o aluno sinaliza que assistiu/concluiu
+        // o conteúdo da missão do dia, liberando a próxima missão.
+        post("/aluno-ia/{userId}/avancar-missao") {
+            val userId = call.parameters["userId"]
+            if (userId.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, "Parâmetro 'userId' é obrigatório.")
+                return@post
+            }
+
+            try {
+                val aluno = alunoIaService.readByUserId(userId)
+                if (aluno == null) {
+                    call.respond(HttpStatusCode.NotFound, "Aluno não encontrado.")
+                    return@post
+                }
+
+                val moduloAtual = aluno.moduloAtual.ifBlank { "module1" }
+                val diaAtual = aluno.missaoAtual.toIntOrNull() ?: 1
+                val proximoDia = (diaAtual + 1).coerceAtMost(MissionFluencyCurriculum.sizeOf(moduloAtual))
+
+                val atualizado = aluno.copy(
+                    moduloAtual = moduloAtual,
+                    missaoAtual = proximoDia.toString(),
+                    ultimaSessao = Instant.now().toString(),
+                )
+                alunoIaService.update(userId, atualizado)
+                call.respond(HttpStatusCode.OK, atualizado)
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao avançar missão: ${e.message}")
             }
         }
 

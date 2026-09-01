@@ -50,4 +50,7 @@ object MissionFluencyCurriculum {
 
     fun dayOf(moduleId: String, day: Int): MissionDay? =
         modules[moduleId.lowercase().trim()]?.find { it.day == day }
+
+    fun sizeOf(moduleId: String): Int =
+        modules[moduleId.lowercase().trim()]?.size ?: module1.size
 }
