@@ -117,10 +117,19 @@ fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
 
                 val moduloAtual = aluno.moduloAtual.ifBlank { "module1" }
                 val diaAtual = aluno.missaoAtual.toIntOrNull() ?: 1
-                val proximoDia = (diaAtual + 1).coerceAtMost(MissionFluencyCurriculum.sizeOf(moduloAtual))
+                val tamanhoModulo = MissionFluencyCurriculum.sizeOf(moduloAtual)
+
+                // Ao concluir o último dia do módulo, avança para o próximo módulo (dia 1).
+                // Se não houver próximo módulo, o aluno fica parado no último dia do atual.
+                val (proximoModulo, proximoDia) = if (diaAtual >= tamanhoModulo) {
+                    val novoModulo = MissionFluencyCurriculum.nextModuleId(moduloAtual)
+                    if (novoModulo != null) novoModulo to 1 else moduloAtual to tamanhoModulo
+                } else {
+                    moduloAtual to diaAtual + 1
+                }
 
                 val atualizado = aluno.copy(
-                    moduloAtual = moduloAtual,
+                    moduloAtual = proximoModulo,
                     missaoAtual = proximoDia.toString(),
                     ultimaSessao = Instant.now().toString(),
                 )
