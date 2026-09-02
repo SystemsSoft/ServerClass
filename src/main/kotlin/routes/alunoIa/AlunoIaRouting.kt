@@ -1,5 +1,7 @@
 package routes.alunoIa
 
+import com.stripe.model.billingportal.Session as PortalSession
+import com.stripe.param.billingportal.SessionCreateParams
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
@@ -9,6 +11,8 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import schemas.alunoIa.AlunoIaDto
 import schemas.alunoIa.AlunoIaService
@@ -25,6 +29,9 @@ data class AssinaturaStatusDto(
     val status: String,
     val atualizadoEm: String,
 )
+
+@Serializable
+data class PortalAssinaturaDto(val url: String)
 
 fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
     routing {
@@ -152,6 +159,51 @@ fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
                 ))
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar assinatura: ${e.message}")
+            }
+        }
+
+        // ── POST /aluno-ia/{userId}/portal-assinatura ────────────────────────
+        // Gera um link do Stripe Customer Portal já autenticado para o cliente
+        // (usando o stripeCustomerId salvo pelo webhook), onde o aluno pode ver
+        // detalhes da assinatura, trocar forma de pagamento e cancelar.
+        // Exige que o Customer Portal esteja configurado no Dashboard da Stripe
+        // (Settings > Billing > Customer portal) e que STRIPE_API_KEY/stripe.apiKey
+        // esteja definido.
+        post("/aluno-ia/{userId}/portal-assinatura") {
+            val userId = call.parameters["userId"]
+            val returnUrl = call.request.queryParameters["returnUrl"]
+
+            if (userId.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, "Parâmetro 'userId' é obrigatório.")
+                return@post
+            }
+            if (returnUrl.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, "Parâmetro de query 'returnUrl' é obrigatório.")
+                return@post
+            }
+
+            try {
+                val aluno = alunoIaService.readByUserId(userId)
+                if (aluno == null) {
+                    call.respond(HttpStatusCode.NotFound, "Aluno não encontrado.")
+                    return@post
+                }
+                if (aluno.stripeCustomerId.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, "Aluno ainda não possui assinatura Stripe vinculada.")
+                    return@post
+                }
+
+                val portalSession = withContext(Dispatchers.IO) {
+                    PortalSession.create(
+                        SessionCreateParams.builder()
+                            .setCustomer(aluno.stripeCustomerId)
+                            .setReturnUrl(returnUrl)
+                            .build()
+                    )
+                }
+                call.respond(HttpStatusCode.OK, PortalAssinaturaDto(url = portalSession.url))
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao gerar link do portal: ${e.message}")
             }
         }
 

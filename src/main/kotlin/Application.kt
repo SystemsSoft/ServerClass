@@ -75,6 +75,9 @@ fun Application.module() {
     loadLocalSecrets("aws-credentials.properties")
     loadLocalSecrets("gemini-credentials.properties")
     loadLocalSecrets("stripe-credentials.properties")
+    (System.getProperty("stripe.apiKey") ?: System.getenv("STRIPE_API_KEY"))?.let {
+        com.stripe.Stripe.apiKey = it
+    }
     configureHTTP()
     configureSockets()
     configureContentNegotiation()
