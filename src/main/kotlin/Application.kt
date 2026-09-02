@@ -22,6 +22,7 @@ import routes.users.clientRouting
 import routes.`class`.flashcardsRouting
 import routes.`class`.uploadRouting
 import routes.alunoIa.alunoIaRouting
+import routes.alunoIa.assinaturaWebhookRouting
 import routes.alunoIa.meganRouting
 import routes.alunoIa.translateRouting
 import services.GeminiLiveBridge
@@ -73,6 +74,7 @@ fun loadLocalSecrets(fileName: String) {
 fun Application.module() {
     loadLocalSecrets("aws-credentials.properties")
     loadLocalSecrets("gemini-credentials.properties")
+    loadLocalSecrets("stripe-credentials.properties")
     configureHTTP()
     configureSockets()
     configureContentNegotiation()
@@ -121,6 +123,7 @@ private fun Application.configureRouting() {
     alunoIaRouting(alunoIaService)
     meganRouting(alunoIaService, geminiLiveBridge)
     translateRouting()
+    assinaturaWebhookRouting(alunoIaService)
 }
 
 

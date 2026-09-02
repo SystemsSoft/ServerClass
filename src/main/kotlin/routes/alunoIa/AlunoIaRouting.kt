@@ -9,10 +9,22 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
+import kotlinx.serialization.Serializable
 import schemas.alunoIa.AlunoIaDto
 import schemas.alunoIa.AlunoIaService
 import schemas.alunoIa.MissionFluencyCurriculum
+import schemas.alunoIa.StatusAssinatura
 import java.time.Instant
+
+@Serializable
+data class AssinaturaStatusDto(
+    val assinante: Boolean,
+    val ativa: Boolean,
+    val cancelada: Boolean,
+    val pagamentoFalhou: Boolean,
+    val status: String,
+    val atualizadoEm: String,
+)
 
 fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
     routing {
@@ -109,6 +121,37 @@ fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
                 call.respond(HttpStatusCode.OK, atualizado)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao avançar missão: ${e.message}")
+            }
+        }
+
+        // ── GET /aluno-ia/{userId}/assinatura ────────────────────────────────
+        // Consumido pelo front-end para saber se o aluno é assinante, se a
+        // assinatura está ativa, foi cancelada, ou se algum pagamento falhou.
+        get("/aluno-ia/{userId}/assinatura") {
+            val userId = call.parameters["userId"]
+            if (userId.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, "Parâmetro 'userId' é obrigatório.")
+                return@get
+            }
+
+            try {
+                val aluno = alunoIaService.readByUserId(userId)
+                if (aluno == null) {
+                    call.respond(HttpStatusCode.NotFound, "Aluno não encontrado.")
+                    return@get
+                }
+
+                val status = aluno.statusAssinatura.ifBlank { StatusAssinatura.INATIVA }
+                call.respond(HttpStatusCode.OK, AssinaturaStatusDto(
+                    assinante = status != StatusAssinatura.INATIVA,
+                    ativa = status == StatusAssinatura.ATIVA,
+                    cancelada = status == StatusAssinatura.CANCELADA,
+                    pagamentoFalhou = status == StatusAssinatura.PAGAMENTO_FALHOU,
+                    status = status,
+                    atualizadoEm = aluno.assinaturaAtualizadaEm,
+                ))
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar assinatura: ${e.message}")
             }
         }
 
