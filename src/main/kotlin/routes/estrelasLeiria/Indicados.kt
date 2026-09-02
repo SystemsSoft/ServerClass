@@ -5,9 +5,9 @@ import io.ktor.server.application.Application
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
-import schemas.estrelasLeiria.Indicado
-import schemas.estrelasLeiria.IndicadoService
-import schemas.estrelasLeiria.IndicadoUpdate
+import schemas.classes.estrelasLeiria.Indicado
+import schemas.classes.estrelasLeiria.IndicadoService
+import schemas.classes.estrelasLeiria.IndicadoUpdate
 import services.S3ApiClient // <--- Não esqueça de importar
 import java.util.UUID
 

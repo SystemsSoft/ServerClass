@@ -11,7 +11,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.ktor.ext.inject
-import schemas.estrelasLeiria.EbookPaidSessionService
+import schemas.classes.estrelasLeiria.EbookPaidSessionService
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.toString
 

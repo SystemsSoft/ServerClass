@@ -5,8 +5,8 @@ import io.ktor.server.application.Application
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
-import schemas.estrelasLeiria.VotoService
-import schemas.estrelasLeiria.Votos
+import schemas.classes.estrelasLeiria.VotoService
+import schemas.classes.estrelasLeiria.Votos
 import java.util.UUID
 
 fun Application.votoRouting(votoService: VotoService) {

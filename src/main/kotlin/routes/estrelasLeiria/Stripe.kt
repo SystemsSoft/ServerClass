@@ -21,8 +21,8 @@ import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransacti
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.koin.core.qualifier.named
 import org.koin.ktor.ext.inject
-import schemas.estrelasLeiria.Indicado
-import schemas.estrelasLeiria.IndicadoService
+import schemas.classes.estrelasLeiria.Indicado
+import schemas.classes.estrelasLeiria.IndicadoService
 import services.S3ApiClient // <--- IMPORTANTE: Importar o seu S3ApiClient
 import java.io.ByteArrayOutputStream
 import java.time.LocalDateTime
@@ -116,8 +116,8 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
     transaction(databaseEstrelas) {
         SchemaUtils.create(PreInscricoesTable)
         try { SchemaUtils.createMissingTablesAndColumns(PreInscricoesTable) } catch (e: Exception) {}
-        SchemaUtils.create(schemas.estrelasLeiria.IndicadoService.IndicadoTable)
-        try { SchemaUtils.createMissingTablesAndColumns(schemas.estrelasLeiria.IndicadoService.IndicadoTable) } catch (e: Exception) {}
+        SchemaUtils.create(_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable)
+        try { SchemaUtils.createMissingTablesAndColumns(_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable) } catch (e: Exception) {}
         SchemaUtils.create(InscritosTable)
         try { SchemaUtils.createMissingTablesAndColumns(InscritosTable) } catch (e: Exception) {}
     }
@@ -145,33 +145,33 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
                 val dataHoraAtual = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
 
                 // 1. Check INDICADOS
-                val indicadoRow = schemas.estrelasLeiria.IndicadoService.IndicadoTable
+                val indicadoRow = _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable
                     .selectAll()
-                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }
+                    .where { _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }
                     .singleOrNull()
 
                 if (indicadoRow != null) {
-                    val qtdIndicado = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]
+                    val qtdIndicado = indicadoRow[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]
 
-                    if (indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkIn]) {
+                    if (indicadoRow[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.checkIn]) {
                         return@newSuspendedTransaction CheckInResponse(
                             status = "ERRO_JA_USADO",
                             mensagem = "Este bilhete já foi validado anteriormente!",
-                            data_uso = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.checkInDate],
-                            nome = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            data_uso = indicadoRow[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.checkInDate],
+                            nome = indicadoRow[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.nome],
                             quantidade = qtdIndicado
                         )
                     } else {
-                        schemas.estrelasLeiria.IndicadoService.IndicadoTable.update({ schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }) {
+                        _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.update({ _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq stripeIdParam }) {
                             it[checkIn] = true
                             it[checkInDate] = dataHoraAtual
                         }
                         return@newSuspendedTransaction CheckInResponse(
                             status = "SUCESSO",
-                            nome = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome],
+                            nome = indicadoRow[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.nome],
                             tipo = "CANDIDATO",
-                            categoria = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
-                            foto = indicadoRow[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData], // Retornará a URL
+                            categoria = indicadoRow[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId],
+                            foto = indicadoRow[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.imageData], // Retornará a URL
                             quantidade = qtdIndicado
                         )
                     }
@@ -395,7 +395,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             val idParam = call.parameters["id"]
             if (idParam == null) { call.respond(HttpStatusCode.BadRequest); return@get }
             val stripeId = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                var found = schemas.estrelasLeiria.IndicadoService.IndicadoTable.selectAll().where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.id eq idParam }.map { it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId] }.singleOrNull()
+                var found = _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.selectAll().where { _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.id eq idParam }.map { it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.stripeId] }.singleOrNull()
                 if (found == null) found = InscritosTable.selectAll().where { InscritosTable.id eq idParam }.map { it[InscritosTable.stripeId] }.singleOrNull()
                 found
             }
@@ -409,7 +409,7 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
 
         get("/admin/sincronizar") {
             val listaCompleta = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                val l1 = schemas.estrelasLeiria.IndicadoService.IndicadoTable.selectAll().where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId.isNotNull() }.map { mapOf("stripeId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId], "nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome], "quantidade" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]) }
+                val l1 = _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.selectAll().where { _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.stripeId.isNotNull() }.map { mapOf("stripeId" to it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.stripeId], "nome" to it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.nome], "quantidade" to it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]) }
                 val l2 = InscritosTable.selectAll().where { InscritosTable.stripeId.isNotNull() }.map { mapOf("stripeId" to it[InscritosTable.stripeId], "nome" to it[InscritosTable.nome], "quantidade" to it[InscritosTable.quantidade]) }
                 l1 + l2
             }
@@ -420,9 +420,9 @@ fun Application.stripeRouting(indicadoService: IndicadoService) {
             val codigoLido = call.parameters["stripeId"]
             if (codigoLido == null) { call.respond(HttpStatusCode.BadRequest); return@get }
             val bilheteEncontrado = newSuspendedTransaction(Dispatchers.IO, db = databaseEstrelas) {
-                var result = schemas.estrelasLeiria.IndicadoService.IndicadoTable.selectAll()
-                    .where { schemas.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq codigoLido }
-                    .map { mapOf("nome" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.nome], "categoriaId" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId], "foto" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.imageData], "status" to "VALIDO (PARTICIPA VOTAÇÃO)", "quantidade" to it[schemas.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]) }.singleOrNull()
+                var result = _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.selectAll()
+                    .where { _root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.stripeId eq codigoLido }
+                    .map { mapOf("nome" to it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.nome], "categoriaId" to it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.categoriaId], "foto" to it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.imageData], "status" to "VALIDO (PARTICIPA VOTAÇÃO)", "quantidade" to it[_root_ide_package_.schemas.classes.estrelasLeiria.IndicadoService.IndicadoTable.quantidade]) }.singleOrNull()
                 if (result == null) {
                     result = InscritosTable.selectAll().where { InscritosTable.stripeId eq codigoLido }
                         .map { mapOf("nome" to it[InscritosTable.nome], "categoriaId" to it[InscritosTable.categoriaId], "foto" to it[InscritosTable.imageData], "status" to "VALIDO (NÃO PARTICIPA DA VOTAÇÃO)", "quantidade" to it[InscritosTable.quantidade]) }.singleOrNull()

@@ -1,13 +1,13 @@
 package routes.estrelasLeiria
 
-import schemas.estrelasLeiria.Categoria
+import schemas.classes.estrelasLeiria.Categoria
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
-import schemas.estrelasLeiria.CategoriaService
+import schemas.classes.estrelasLeiria.CategoriaService
 import java.util.UUID // Import necessário para gerar IDs únicos
 
 fun Application.categoriaRouting(categoriaService: CategoriaService) {

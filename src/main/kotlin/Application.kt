@@ -32,9 +32,9 @@ import routes.estrelasLeiria.votoRouting
 import schemas.alunoIa.AlunoIaService
 import schemas.classes.ClassesListService
 import schemas.classes.FlashcardService
-import schemas.estrelasLeiria.CategoriaService
-import schemas.estrelasLeiria.IndicadoService
-import schemas.estrelasLeiria.VotoService
+import schemas.classes.estrelasLeiria.CategoriaService
+import schemas.classes.estrelasLeiria.IndicadoService
+import schemas.classes.estrelasLeiria.VotoService
 import schemas.users.ClientService
 import kotlin.getValue
 import org.koin.core.qualifier.named

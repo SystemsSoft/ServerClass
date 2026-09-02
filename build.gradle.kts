@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.ktor.server.netty)
     implementation(libs.logback.classic)
     implementation(libs.ktor.server.config.yaml)
+    implementation("com.github.f4b6a3:ulid-creator:5.2.2")
     implementation("com.stripe:stripe-java:28.1.0")
     implementation("aws.sdk.kotlin:s3:1.0.0")
     implementation("com.google.zxing:core:3.5.2")

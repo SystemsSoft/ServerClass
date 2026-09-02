@@ -12,9 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
-import schemas.estrelasLeiria.BilheteManualDTO
-import schemas.estrelasLeiria.Indicado
-import schemas.estrelasLeiria.IndicadoService
+import schemas.classes.estrelasLeiria.BilheteManualDTO
+import schemas.classes.estrelasLeiria.Indicado
+import schemas.classes.estrelasLeiria.IndicadoService
 import java.util.UUID
 import kotlin.concurrent.thread
 

@@ -1,4 +1,4 @@
-package schemas.estrelasLeiria
+package schemas.classes.estrelasLeiria
 
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.*
