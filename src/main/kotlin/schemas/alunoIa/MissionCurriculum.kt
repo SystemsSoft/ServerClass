@@ -1,9 +1,26 @@
 package schemas.alunoIa
 
+import kotlinx.serialization.Serializable
+
 data class MissionDay(
     val day: Int,
     val topic: String,
     val conversationSeed: String,
+)
+
+/**
+ * Versão pública de [MissionDay] para exibição no front-end (ex: tela de grade do curso).
+ * Não inclui [MissionDay.conversationSeed] de propósito: é uma instrução interna para a
+ * Megan sobre como iniciar a conversa, e nunca deve ser revelada ao aluno (ver MeganPersona.kt).
+ */
+@Serializable
+data class MissionDayPublicDto(val day: Int, val topic: String)
+
+@Serializable
+data class MissionModuleDto(
+    val moduleId: String,
+    val totalDias: Int,
+    val dias: List<MissionDayPublicDto>,
 )
 
 object MissionFluencyCurriculum {
@@ -138,4 +155,18 @@ object MissionFluencyCurriculum {
         val idx = moduleOrder.indexOfFirst { it.first == canonical }
         return moduleOrder.getOrNull(idx + 1)?.first
     }
+
+    /** Dias de um módulo (versão pública, sem conversationSeed), ou null se o módulo não existir. */
+    fun publicDaysOf(moduleId: String): List<MissionDayPublicDto>? =
+        modules[moduleId.lowercase().trim()]?.map { MissionDayPublicDto(it.day, it.topic) }
+
+    /** Todos os módulos, na ordem de progressão, em formato público (para telas de grade/trilha). */
+    fun allModulesPublic(): List<MissionModuleDto> =
+        moduleOrder.map { (id, days) ->
+            MissionModuleDto(
+                moduleId = id,
+                totalDias = days.size,
+                dias = days.map { MissionDayPublicDto(it.day, it.topic) },
+            )
+        }
 }

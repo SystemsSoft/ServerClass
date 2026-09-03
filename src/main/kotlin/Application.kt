@@ -23,6 +23,7 @@ import routes.`class`.flashcardsRouting
 import routes.`class`.uploadRouting
 import routes.alunoIa.alunoIaRouting
 import routes.alunoIa.assinaturaWebhookRouting
+import routes.alunoIa.curriculumRouting
 import routes.alunoIa.meganRouting
 import routes.alunoIa.translateRouting
 import services.GeminiLiveBridge
@@ -127,6 +128,7 @@ private fun Application.configureRouting() {
     meganRouting(alunoIaService, geminiLiveBridge)
     translateRouting()
     assinaturaWebhookRouting(alunoIaService)
+    curriculumRouting()
 }
 
 
