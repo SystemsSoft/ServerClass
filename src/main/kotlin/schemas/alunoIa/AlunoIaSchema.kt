@@ -134,6 +134,15 @@ class AlunoIaService(private val database: Database) {
         }
     }
 
+    // ── UPDATE ÚLTIMA SESSÃO ─────────────────────────────────────────────────
+    // Atualização parcial (só ultimaSessao), para não sobrescrever moduloAtual/
+    // missaoAtual com um snapshot desatualizado do aluno (ver MeganRouting.kt).
+    suspend fun updateUltimaSessao(userId: String, ultimaSessao: String): Int = dbQuery {
+        AlunoIaTable.update({ AlunoIaTable.userId eq userId }) {
+            it[AlunoIaTable.ultimaSessao] = ultimaSessao
+        }
+    }
+
     // ── UPDATE ASSINATURA (por userId) ──────────────────────────────────────
     // Atualização parcial (só as colunas de assinatura) para não sobrescrever o
     // restante do registro do aluno ao processar eventos do webhook do Stripe.

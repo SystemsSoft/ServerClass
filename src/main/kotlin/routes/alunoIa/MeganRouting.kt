@@ -57,11 +57,13 @@ fun Application.meganRouting(alunoIaService: AlunoIaService, geminiLiveBridge: G
                     // O avanço de missão não acontece mais aqui: o front-end chama
                     // POST /aluno-ia/{userId}/avancar-missao quando o aluno sinaliza que
                     // assistiu/concluiu o conteúdo do dia. Aqui só registramos o horário
-                    // da última sessão de chamada.
+                    // da última sessão de chamada — update PARCIAL, de propósito: usar
+                    // o update() completo com o snapshot `aluno` (capturado no início da
+                    // chamada) sobrescreveria moduloAtual/missaoAtual com valores antigos,
+                    // desfazendo um avancar-missao que o front já tenha chamado antes de
+                    // encerrar a ligação.
                     runCatching {
-                        alunoIaService.update(userId, aluno.copy(
-                            ultimaSessao = Instant.now().toString(),
-                        ))
+                        alunoIaService.updateUltimaSessao(userId, Instant.now().toString())
                     }
                 }
             }
