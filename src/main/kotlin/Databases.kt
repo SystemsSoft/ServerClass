@@ -21,7 +21,7 @@ import services.GeminiTranslationService
 
 object DatabaseConfig {
 
-    private val host = System.getProperty("db.host") ?: System.getenv("DB_HOST") ?: "ls-83cb12ed62490b7f04b5b693968286e4df55d2a4.codoai20o7g2.us-east-1.rds.amazonaws.com"
+    private val host = System.getProperty("db.host") ?: System.getenv("DB_HOST") ?: "ls-2604b71534d5a90611ca87c04b8512b860560ff4.cwtokk0amd7p.us-east-1.rds.amazonaws.com"
     private val dbUser = System.getProperty("db.user") ?: System.getenv("DB_USER") ?: "dbmasteruser"
     private val dbPassword = System.getProperty("db.password") ?: System.getenv("DB_PASSWORD") ?: "dbmasteruser"
 
