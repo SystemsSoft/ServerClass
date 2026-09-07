@@ -10,8 +10,9 @@ import io.ktor.websocket.send
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import schemas.alunoIa.AlunoIaService
+import schemas.alunoIa.Idioma
+import schemas.alunoIa.IdiomaCurriculum
 import schemas.alunoIa.MeganPersona
-import schemas.alunoIa.MissionFluencyCurriculum
 import services.GeminiLiveBridge
 import java.time.Instant
 
@@ -31,9 +32,11 @@ fun Application.meganRouting(alunoIaService: AlunoIaService, geminiLiveBridge: G
             }
 
             val aluno = runCatching { alunoIaService.readByUserId(userId) }.getOrNull()
+            val idioma = Idioma.fromCodigo(aluno?.idioma)
+            val curriculo = IdiomaCurriculum.forIdioma(idioma)
             val currentDay = aluno?.missaoAtual?.toIntOrNull() ?: 1
-            val day = MissionFluencyCurriculum.dayOf(aluno?.moduloAtual ?: "module1", currentDay)
-                ?: MissionFluencyCurriculum.module1.first()
+            val day = curriculo.dayOf(aluno?.moduloAtual ?: "module1", currentDay)
+                ?: curriculo.firstDay()
 
             send(Frame.Text(buildJsonObject {
                 put("type", "session_ready")
@@ -43,7 +46,7 @@ fun Application.meganRouting(alunoIaService: AlunoIaService, geminiLiveBridge: G
 
             try {
                 val studentName = aluno?.nome?.takeIf { it.isNotBlank() } ?: "there"
-                geminiLiveBridge.bridge(this, MeganPersona.systemInstructionFor(day, studentName))
+                geminiLiveBridge.bridge(this, MeganPersona.systemInstructionFor(day, studentName, idioma))
             } catch (e: Exception) {
                 println("[Megan] Erro na sessão de $userId: ${e.message}")
                 runCatching {

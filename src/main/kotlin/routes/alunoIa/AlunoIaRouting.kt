@@ -16,7 +16,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import schemas.alunoIa.AlunoIaDto
 import schemas.alunoIa.AlunoIaService
-import schemas.alunoIa.MissionFluencyCurriculum
+import schemas.alunoIa.Idioma
+import schemas.alunoIa.IdiomaCurriculum
 import schemas.alunoIa.StatusAssinatura
 import java.time.Instant
 
@@ -115,14 +116,15 @@ fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
                     return@post
                 }
 
+                val curriculo = IdiomaCurriculum.forIdioma(Idioma.fromCodigo(aluno.idioma))
                 val moduloAtual = aluno.moduloAtual.ifBlank { "module1" }
                 val diaAtual = aluno.missaoAtual.toIntOrNull() ?: 1
-                val tamanhoModulo = MissionFluencyCurriculum.sizeOf(moduloAtual)
+                val tamanhoModulo = curriculo.sizeOf(moduloAtual)
 
                 // Ao concluir o último dia do módulo, avança para o próximo módulo (dia 1).
                 // Se não houver próximo módulo, o aluno fica parado no último dia do atual.
                 val (proximoModulo, proximoDia) = if (diaAtual >= tamanhoModulo) {
-                    val novoModulo = MissionFluencyCurriculum.nextModuleId(moduloAtual)
+                    val novoModulo = curriculo.nextModuleId(moduloAtual)
                     if (novoModulo != null) novoModulo to 1 else moduloAtual to tamanhoModulo
                 } else {
                     moduloAtual to diaAtual + 1

@@ -23,9 +23,58 @@ data class MissionModuleDto(
     val dias: List<MissionDayPublicDto>,
 )
 
-object MissionFluencyCurriculum {
+/**
+ * Currículo de progressão gramatical de um idioma: [MissionDay]s organizados em módulos
+ * ordenados. Cada idioma suportado pela Megan (ver [Idioma]) tem a sua própria instância
+ * — Inglês aqui embaixo em [MissionFluencyCurriculum], os demais em
+ * MissionCurriculum{Idioma}.kt. [IdiomaCurriculum] é o registro central que resolve
+ * qual instância usar a partir do [Idioma] do aluno.
+ */
+class LanguageCurriculum(private val moduleOrder: List<Pair<String, List<MissionDay>>>) {
 
-    val module1: List<MissionDay> = listOf(
+    private val modules: Map<String, List<MissionDay>> = buildMap {
+        moduleOrder.forEach { (id, days) ->
+            put(id, days)
+            put(id.removePrefix("module"), days) // atalho: aceita também só o número ("1", "2")
+        }
+    }
+
+    fun firstDay(): MissionDay = moduleOrder.first().second.first()
+
+    fun dayOf(moduleId: String, day: Int): MissionDay? =
+        modules[moduleId.lowercase().trim()]?.find { it.day == day }
+
+    fun sizeOf(moduleId: String): Int =
+        modules[moduleId.lowercase().trim()]?.size ?: moduleOrder.first().second.size
+
+    private fun canonicalModuleId(moduleId: String): String? {
+        val normalized = moduleId.lowercase().trim()
+        return moduleOrder.map { it.first }.find { it == normalized || it == "module$normalized" }
+    }
+
+    /** Id do próximo módulo na sequência após [moduleId], ou null se já for o último (ou inválido). */
+    fun nextModuleId(moduleId: String): String? {
+        val canonical = canonicalModuleId(moduleId) ?: return null
+        val idx = moduleOrder.indexOfFirst { it.first == canonical }
+        return moduleOrder.getOrNull(idx + 1)?.first
+    }
+
+    /** Dias de um módulo (versão pública, sem conversationSeed), ou null se o módulo não existir. */
+    fun publicDaysOf(moduleId: String): List<MissionDayPublicDto>? =
+        modules[moduleId.lowercase().trim()]?.map { MissionDayPublicDto(it.day, it.topic) }
+
+    /** Todos os módulos, na ordem de progressão, em formato público (para telas de grade/trilha). */
+    fun allModulesPublic(): List<MissionModuleDto> =
+        moduleOrder.map { (id, days) ->
+            MissionModuleDto(
+                moduleId = id,
+                totalDias = days.size,
+                dias = days.map { MissionDayPublicDto(it.day, it.topic) },
+            )
+        }
+}
+
+private val inglesModule1: List<MissionDay> = listOf(
         MissionDay(1, "Definite and indefinite articles",
             "Ask about the things on the student's desk, in their bag or around their room right now."),
         MissionDay(2, "Possessive adjectives",
@@ -60,7 +109,7 @@ object MissionFluencyCurriculum {
             "Ask about the student's plans for the weekend, next vacation, or predictions about something coming up."),
     )
 
-    val module2: List<MissionDay> = listOf(
+private val inglesModule2: List<MissionDay> = listOf(
         MissionDay(1, "Phrasal verbs with \"get\" (get up, get along, get over, get into)",
             "Ask about the student's morning routine, how they get along with family, or something they got over recently."),
         MissionDay(2, "Small talk expressions (How's it going, What's up, Long time no see)",
@@ -123,50 +172,13 @@ object MissionFluencyCurriculum {
             "Talk about getting along with coworkers or family, or agreeing with someone."),
     )
 
-    // Ordem de progressão dos módulos: ao terminar o último dia de um módulo, o aluno
-    // avança para o próximo desta lista. Para adicionar um module3 no futuro, basta
-    // declarar a lista de MissionDay acima e incluir aqui, nesta ordem.
-    private val moduleOrder: List<Pair<String, List<MissionDay>>> = listOf(
-        "module1" to module1,
-        "module2" to module2,
+/**
+ * Currículo de inglês (o original da Missão Fluência). Para adicionar um module3 no
+ * futuro, basta declarar a lista de [MissionDay] acima e incluir aqui, nesta ordem.
+ */
+val MissionFluencyCurriculum = LanguageCurriculum(
+    listOf(
+        "module1" to inglesModule1,
+        "module2" to inglesModule2,
     )
-
-    private val modules: Map<String, List<MissionDay>> = buildMap {
-        moduleOrder.forEach { (id, days) ->
-            put(id, days)
-            put(id.removePrefix("module"), days) // atalho: aceita também só o número ("1", "2")
-        }
-    }
-
-    fun dayOf(moduleId: String, day: Int): MissionDay? =
-        modules[moduleId.lowercase().trim()]?.find { it.day == day }
-
-    fun sizeOf(moduleId: String): Int =
-        modules[moduleId.lowercase().trim()]?.size ?: module1.size
-
-    private fun canonicalModuleId(moduleId: String): String? {
-        val normalized = moduleId.lowercase().trim()
-        return moduleOrder.map { it.first }.find { it == normalized || it == "module$normalized" }
-    }
-
-    /** Id do próximo módulo na sequência após [moduleId], ou null se já for o último (ou inválido). */
-    fun nextModuleId(moduleId: String): String? {
-        val canonical = canonicalModuleId(moduleId) ?: return null
-        val idx = moduleOrder.indexOfFirst { it.first == canonical }
-        return moduleOrder.getOrNull(idx + 1)?.first
-    }
-
-    /** Dias de um módulo (versão pública, sem conversationSeed), ou null se o módulo não existir. */
-    fun publicDaysOf(moduleId: String): List<MissionDayPublicDto>? =
-        modules[moduleId.lowercase().trim()]?.map { MissionDayPublicDto(it.day, it.topic) }
-
-    /** Todos os módulos, na ordem de progressão, em formato público (para telas de grade/trilha). */
-    fun allModulesPublic(): List<MissionModuleDto> =
-        moduleOrder.map { (id, days) ->
-            MissionModuleDto(
-                moduleId = id,
-                totalDias = days.size,
-                dias = days.map { MissionDayPublicDto(it.day, it.topic) },
-            )
-        }
-}
+)

@@ -32,6 +32,7 @@ data class AlunoIaDto(
     val moduloAtual: String = "",
     val missaoAtual: String = "",
     val ultimaSessao: String = "",
+    val idioma: String = Idioma.DEFAULT.codigo,
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -50,6 +51,7 @@ class AlunoIaService(private val database: Database) {
         val moduloAtual            = varchar("modulo_atual", 50)
         val missaoAtual            = varchar("missao_atual", 50)
         val ultimaSessao           = varchar("ultima_sessao", 50)
+        val idioma                 = varchar("idioma", 30).default(Idioma.DEFAULT.codigo)
 
         override val primaryKey = PrimaryKey(id)
     }
@@ -81,6 +83,7 @@ class AlunoIaService(private val database: Database) {
             it[moduloAtual]            = aluno.moduloAtual
             it[missaoAtual]            = aluno.missaoAtual
             it[ultimaSessao]           = aluno.ultimaSessao
+            it[idioma]                 = aluno.idioma
         }[AlunoIaTable.id]
 
         aluno.copy(id = newId)
@@ -131,6 +134,7 @@ class AlunoIaService(private val database: Database) {
             it[moduloAtual]            = aluno.moduloAtual
             it[missaoAtual]            = aluno.missaoAtual
             it[ultimaSessao]           = aluno.ultimaSessao
+            it[idioma]                 = aluno.idioma
         }
     }
 
@@ -210,6 +214,7 @@ class AlunoIaService(private val database: Database) {
         moduloAtual            = this[AlunoIaTable.moduloAtual],
         missaoAtual            = this[AlunoIaTable.missaoAtual],
         ultimaSessao           = this[AlunoIaTable.ultimaSessao],
+        idioma                 = this[AlunoIaTable.idioma],
     )
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
