@@ -33,6 +33,7 @@ data class AlunoIaDto(
     val missaoAtual: String = "",
     val ultimaSessao: String = "",
     val idioma: String = Idioma.DEFAULT.codigo,
+    val testeGratisUsado: Boolean = false,
 )
 
 @Suppress("MISSING_DEPENDENCY_SUPERCLASS_IN_TYPE_ARGUMENT")
@@ -52,6 +53,7 @@ class AlunoIaService(private val database: Database) {
         val missaoAtual            = varchar("missao_atual", 50)
         val ultimaSessao           = varchar("ultima_sessao", 50)
         val idioma                 = varchar("idioma", 30).default(Idioma.DEFAULT.codigo)
+        val testeGratisUsado       = bool("teste_gratis_usado").default(false)
 
         override val primaryKey = PrimaryKey(id)
     }
@@ -89,6 +91,7 @@ class AlunoIaService(private val database: Database) {
             it[missaoAtual]            = aluno.missaoAtual
             it[ultimaSessao]           = aluno.ultimaSessao
             it[idioma]                 = idiomaNormalizado
+            it[testeGratisUsado]       = aluno.testeGratisUsado
         }[AlunoIaTable.id]
 
         aluno.copy(id = newId, idioma = idiomaNormalizado)
@@ -142,6 +145,17 @@ class AlunoIaService(private val database: Database) {
             // Mesma normalização do create(): idioma vazio/em branco/desconhecido vira o
             // código do idioma padrão (inglês) — nunca persiste "" no banco.
             it[idioma]                 = Idioma.fromCodigo(aluno.idioma).codigo
+            it[testeGratisUsado]       = aluno.testeGratisUsado
+        }
+    }
+
+    // ── MARCAR TESTE GRÁTIS COMO USADO ───────────────────────────────────────
+    // Atualização parcial (só essa coluna) — chamada pelo app quando a ligação
+    // de teste grátis termina, pra bloquear um novo teste pelo mesmo aluno.
+    // Idempotente: chamar de novo com o teste já marcado não tem efeito.
+    suspend fun marcarTesteGratisUsado(userId: String): Int = dbQuery {
+        AlunoIaTable.update({ AlunoIaTable.userId eq userId }) {
+            it[AlunoIaTable.testeGratisUsado] = true
         }
     }
 
@@ -222,6 +236,7 @@ class AlunoIaService(private val database: Database) {
         missaoAtual            = this[AlunoIaTable.missaoAtual],
         ultimaSessao           = this[AlunoIaTable.ultimaSessao],
         idioma                 = this[AlunoIaTable.idioma],
+        testeGratisUsado       = this[AlunoIaTable.testeGratisUsado],
     )
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =

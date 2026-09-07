@@ -142,6 +142,30 @@ fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
             }
         }
 
+        // ── POST /aluno-ia/{userId}/teste-gratis-usado ───────────────────────
+        // Chamado pelo front-end quando a ligação de teste grátis termina
+        // (por tempo esgotado ou desligamento manual), marcando que esse
+        // aluno já não tem mais direito a um novo teste — só a passar a
+        // assinar. Idempotente: chamar de novo não tem efeito adicional.
+        post("/aluno-ia/{userId}/teste-gratis-usado") {
+            val userId = call.parameters["userId"]
+            if (userId.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, "Parâmetro 'userId' é obrigatório.")
+                return@post
+            }
+
+            try {
+                val linhas = alunoIaService.marcarTesteGratisUsado(userId)
+                if (linhas == 0) {
+                    call.respond(HttpStatusCode.NotFound, "Aluno não encontrado.")
+                } else {
+                    call.respond(HttpStatusCode.OK)
+                }
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao marcar teste grátis: ${e.message}")
+            }
+        }
+
         // ── GET /aluno-ia/{userId}/assinatura ────────────────────────────────
         // Consumido pelo front-end para saber se o aluno é assinante, se a
         // assinatura está ativa, foi cancelada, ou se algum pagamento falhou.
