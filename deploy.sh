@@ -5,10 +5,17 @@ KEY_FILE="ssh-key.pem"
 JAR_FILE="build/libs/server-0.0.1.jar"
 REMOTE_PATH="/home/$SERVER_USER/server-0.0.1.jar"
 
+# Arquivos de credenciais locais (gitignored — ver loadLocalSecrets() em
+# Application.kt) que precisam ir junto a cada deploy. Sem isso, trocar uma
+# chave aqui local e rodar ./deploy.sh não tinha efeito nenhum: só o JAR
+# subia, o servidor continuava com o properties antigo que já estava lá.
+# Cada um é opcional — só envia os que existirem neste diretório.
+CREDENTIAL_FILES=("aws-credentials.properties" "gemini-credentials.properties" "stripe-credentials.properties")
+
 # Garante permissão correta na chave
 chmod 400 $KEY_FILE
 
-echo "--- [1/3] Building JAR ---"
+echo "--- [1/4] Building JAR ---"
 ./gradlew shadowJar
 
 if [ $? -ne 0 ]; then
@@ -16,10 +23,20 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "--- [2/3] Uploading to Server ($SERVER_IP) ---"
+echo "--- [2/4] Uploading JAR to Server ($SERVER_IP) ---"
 scp -i $KEY_FILE $JAR_FILE $SERVER_USER@$SERVER_IP:$REMOTE_PATH
 
-echo "--- [3/3] Restarting Service ---"
+echo "--- [3/4] Uploading credential files ---"
+for cred_file in "${CREDENTIAL_FILES[@]}"; do
+  if [ -f "$cred_file" ]; then
+    echo "Enviando $cred_file..."
+    scp -i $KEY_FILE "$cred_file" $SERVER_USER@$SERVER_IP:/home/$SERVER_USER/"$cred_file"
+  else
+    echo "$cred_file não existe localmente, pulando (servidor mantém o que já tiver, ou usa variáveis de ambiente)."
+  fi
+done
+
+echo "--- [4/4] Restarting Service ---"
 ssh -i $KEY_FILE $SERVER_USER@$SERVER_IP << 'EOF'
   # Mata o(s) processo(s) antigo(s), esperando de verdade eles saírem (até 15s) antes de
   # seguir. Isso evita processos "zumbis": se o kill normal (SIGTERM) não bastar porque o
