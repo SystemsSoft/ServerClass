@@ -71,6 +71,11 @@ class AlunoIaService(private val database: Database) {
 
     // ── CREATE ────────────────────────────────────────────────────────────────
     suspend fun create(aluno: AlunoIaDto): AlunoIaDto = dbQuery {
+        // Normaliza aqui (não só na leitura): se o cadastro vier com idioma vazio/em
+        // branco/desconhecido, grava o código do idioma padrão (inglês) no banco, em vez
+        // de persistir "" — ver Idioma.fromCodigo.
+        val idiomaNormalizado = Idioma.fromCodigo(aluno.idioma).codigo
+
         val newId = AlunoIaTable.insert {
             it[userId]                 = aluno.userId
             it[nome]                   = aluno.nome
@@ -83,10 +88,10 @@ class AlunoIaService(private val database: Database) {
             it[moduloAtual]            = aluno.moduloAtual
             it[missaoAtual]            = aluno.missaoAtual
             it[ultimaSessao]           = aluno.ultimaSessao
-            it[idioma]                 = aluno.idioma
+            it[idioma]                 = idiomaNormalizado
         }[AlunoIaTable.id]
 
-        aluno.copy(id = newId)
+        aluno.copy(id = newId, idioma = idiomaNormalizado)
     }
 
     // ── READ BY USER ID ──────────────────────────────────────────────────────
@@ -134,7 +139,9 @@ class AlunoIaService(private val database: Database) {
             it[moduloAtual]            = aluno.moduloAtual
             it[missaoAtual]            = aluno.missaoAtual
             it[ultimaSessao]           = aluno.ultimaSessao
-            it[idioma]                 = aluno.idioma
+            // Mesma normalização do create(): idioma vazio/em branco/desconhecido vira o
+            // código do idioma padrão (inglês) — nunca persiste "" no banco.
+            it[idioma]                 = Idioma.fromCodigo(aluno.idioma).codigo
         }
     }
 
