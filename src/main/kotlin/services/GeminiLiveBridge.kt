@@ -98,9 +98,19 @@ class GeminiLiveBridge {
     // responder por esse tempo, consideramos a chave atual "lenta/travada" e trocamos pra
     // próxima da lista (gratuita-1 -> gratuita-2 -> paga), sem derrubar o cliente e sem
     // perder o histórico da conversa — é isso que evita a Megan ficar "pensando" pra sempre.
+    //
+    // 22s (não 9s, valor inicial que usamos e que se mostrou baixo demais): logs reais de
+    // produção (08/09/2026) mostraram a Gemini demorando ROTINEIRAMENTE entre 9 e 11s pra
+    // responder mesmo quando está tudo normal — com o limiar em 9s, isso disparava a troca de
+    // chave em praticamente toda resposta um pouco mais lenta, esgotando as 3 chaves em
+    // sequência e forçando o app a reconectar do zero (o loop relatado pelo usuário). 22s dá
+    // margem real acima dessa faixa observada; ainda assim é só uma estimativa — reavaliar se
+    // aparecerem trocas de chave nos logs com valores bem acima de ~11s (sinal de que 22s
+    // ainda está curto) ou se a Megan ficar "pensando" por mais de 22s sem nenhuma troca
+    // acontecer (sinal de que dá pra baixar).
     private val responseTimeoutMillis: Long = System.getProperty("gemini.responseTimeoutMillis")?.toLongOrNull()
         ?: System.getenv("GEMINI_RESPONSE_TIMEOUT_MILLIS")?.toLongOrNull()
-        ?: 9_000L
+        ?: 22_000L
 
     /**
      * Abre a sessão upstream com a Gemini Live API e relay bidirecional com [clientSession]
@@ -163,9 +173,27 @@ class GeminiLiveBridge {
         val lastFromGeminiAt = AtomicLong(System.currentTimeMillis())
         val clientDisconnected = AtomicBoolean(false)
 
+        // Numa troca de chave no meio da ligação, o [systemInstruction] original (ver
+        // MeganPersona.kt) ainda manda a Megan "estruturar a ligação" com saudação +
+        // explicação de abertura — isso tem prioridade MAIOR que um simples turno de usuário
+        // com o resumo do histórico, então sem isso aqui embaixo a Megan reiniciava a ligação
+        // do zero mesmo recebendo o resumo (foi exatamente o que o teste real mostrou: o
+        // histórico ia junto, mas a persona insistia em reabrir a chamada de qualquer jeito).
+        val effectiveInstruction = if (history.hasContent()) {
+            systemInstruction + "\n\n" +
+                "IMPORTANT — this is a mid-call reconnect, not a new call: you already greeted " +
+                "the student and started the lesson before a brief technical hiccup. The very " +
+                "next user message is a summary of everything said so far in this call. Do NOT " +
+                "greet the student again, do NOT restart your opening explanation, do NOT " +
+                "introduce today's topic again as if it were new — just continue the " +
+                "conversation naturally from exactly where that summary leaves off."
+        } else {
+            systemInstruction
+        }
+
         client.webSocket(urlString = url) {
-            send(Frame.Text(buildSetupMessage(systemInstruction).toString()))
-            MeganLog.d("[Megan][diag] setup enviado para a Gemini (chave: ${entry.label})")
+            send(Frame.Text(buildSetupMessage(effectiveInstruction).toString()))
+            MeganLog.d("[Megan][diag] setup enviado para a Gemini (chave: ${entry.label}, retomando histórico: ${history.hasContent()})")
 
             // Primeira vez da ligação: "Hi!" (a Megan puxa assunto sozinha). Depois de uma
             // troca de chave no meio da conversa: um resumo do que já foi dito, pra ela
@@ -346,6 +374,12 @@ class ConversationHistory {
 
     /** Só guarda as últimas rodadas — o resumo não precisa (nem deve) crescer sem limite. */
     private val maxTurnsToReplay = 24
+
+    /** true assim que pelo menos uma rodada completa foi absorvida — usado pra saber se essa
+     *  é a primeira tentativa da ligação (persona normal) ou uma retomada (persona ajustada
+     *  pra não reiniciar a chamada — ver [GeminiLiveBridge.attemptSession]). */
+    @Synchronized
+    fun hasContent(): Boolean = turns.isNotEmpty()
 
     @Synchronized
     fun absorb(frame: Frame) {
