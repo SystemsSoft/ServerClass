@@ -14,6 +14,7 @@ import schemas.alunoIa.Idioma
 import schemas.alunoIa.IdiomaCurriculum
 import schemas.alunoIa.MeganPersona
 import services.GeminiLiveBridge
+import services.MeganLog
 import java.time.Instant
 
 /**
@@ -48,7 +49,7 @@ fun Application.meganRouting(alunoIaService: AlunoIaService, geminiLiveBridge: G
                 val studentName = aluno?.nome?.takeIf { it.isNotBlank() } ?: "there"
                 geminiLiveBridge.bridge(this, MeganPersona.systemInstructionFor(day, studentName, idioma))
             } catch (e: Exception) {
-                println("[Megan] Erro na sessão de $userId: ${e.message}")
+                MeganLog.d("[Megan] Erro na sessão de $userId: ${e.message}")
                 runCatching {
                     send(Frame.Text(buildJsonObject {
                         put("type", "error")
