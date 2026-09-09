@@ -121,6 +121,18 @@ class GeminiLiveBridge {
         ?: System.getenv("GEMINI_RESPONSE_TIMEOUT_MILLIS")?.toLongOrNull()
         ?: 22_000L
 
+    // A Gemini não tem noção de tempo real decorrido — pedir "por volta dos X minutos" no
+    // system instruction (ver MeganPersona.kt) é só uma referência narrativa que ela tenta
+    // seguir contando trocas de fala, não um relógio de verdade; numa conversa mais compacta
+    // ela pode se despedir bem antes do tempo real pretendido. Por isso o AVISO de despedida
+    // é decidido aqui pelo relógio real do servidor (contado desde o início da LIGAÇÃO — ver
+    // [bridge] — não desde cada tentativa de chave) e mandado pra Gemini como uma mensagem
+    // (ver [attemptSession]), do mesmo jeito que já fazemos com a saudação inicial ("Hi!") e o
+    // resumo de retomada após troca de chave.
+    private val windDownAfterMillis: Long = System.getProperty("gemini.windDownAfterMillis")?.toLongOrNull()
+        ?: System.getenv("GEMINI_WIND_DOWN_AFTER_MILLIS")?.toLongOrNull()
+        ?: 7 * 60_000L
+
     /**
      * Abre a sessão upstream com a Gemini Live API e relay bidirecional com [clientSession]
      * até o cliente encerrar a conexão (ou todas as chaves configuradas falharem). Suspende
@@ -138,11 +150,16 @@ class GeminiLiveBridge {
         val history = ConversationHistory()
         var lastError: Throwable? = null
         var keyIndex = 0
+        // Início real da LIGAÇÃO (não de cada tentativa de chave) — é a partir daqui que o
+        // aviso de despedida (ver [windDownAfterMillis]) conta o tempo, pra uma troca de chave
+        // no meio da ligação não reiniciar o relógio nem duplicar o aviso.
+        val callStartedAt = System.currentTimeMillis()
+        val windDownSent = AtomicBoolean(false)
 
         while (keyIndex < apiKeys.size) {
             val entry = apiKeys[keyIndex]
             val outcome = try {
-                attemptSession(clientSession, systemInstruction, entry, history)
+                attemptSession(clientSession, systemInstruction, entry, history, callStartedAt, windDownSent)
             } catch (e: Exception) {
                 lastError = e
                 MeganLog.d("[Megan] Falha ao conectar com a chave '${entry.label}': ${e.message} — tentando próxima chave, se houver.")
@@ -176,6 +193,8 @@ class GeminiLiveBridge {
         systemInstruction: String,
         entry: ApiKeyEntry,
         history: ConversationHistory,
+        callStartedAt: Long,
+        windDownSent: AtomicBoolean,
     ): SessionOutcome {
         val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${entry.key}"
         val lastFromClientAt = AtomicLong(System.currentTimeMillis())
@@ -330,9 +349,51 @@ class GeminiLiveBridge {
                     }
                 }
 
+                // Avisa a Megan pra começar a se despedir quando o tempo REAL da ligação (não
+                // a percepção dela) atingir [windDownAfterMillis] — ver o comentário de lá.
+                // `callStartedAt` vem de [bridge], não muda numa troca de chave, então uma
+                // troca no meio da ligação não adia nem duplica o aviso: se ele já foi mandado
+                // numa tentativa anterior, [windDownSent] garante que essa tentativa não manda
+                // de novo; se ainda não foi, o delay é recalculado com o tempo real já passado.
+                val windDownNudge = launch {
+                    if (windDownSent.get()) return@launch
+                    val remaining = windDownAfterMillis - (System.currentTimeMillis() - callStartedAt)
+                    if (remaining > 0) delay(remaining)
+                    if (windDownSent.compareAndSet(false, true)) {
+                        MeganLog.d(
+                            "[Megan] Marca real de ${windDownAfterMillis / 60_000} min atingida (chave: " +
+                                "${entry.label}) — avisando a Megan pra começar a se despedir."
+                        )
+                        runCatching {
+                            send(Frame.Text(buildJsonObject {
+                                putJsonObject("clientContent") {
+                                    putJsonArray("turns") {
+                                        addJsonObject {
+                                            put("role", "user")
+                                            putJsonArray("parts") {
+                                                addJsonObject {
+                                                    put(
+                                                        "text",
+                                                        "(System note — not something the student said: this call has " +
+                                                            "now really reached its wind-down point. Start warmly " +
+                                                            "wrapping up the call now, as instructed in your system " +
+                                                            "prompt — do not wait any longer.)",
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    put("turnComplete", true)
+                                }
+                            }.toString()))
+                        }
+                    }
+                }
+
                 toGemini.join()
                 toClient.join()
                 watchdog.cancel()
+                windDownNudge.cancel()
             }
 
             MeganLog.d(
