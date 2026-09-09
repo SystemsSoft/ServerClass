@@ -21,11 +21,13 @@ import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.put
+import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -94,10 +96,17 @@ class GeminiLiveBridge {
         ?: System.getenv("GEMINI_IDLE_TIMEOUT_MILLIS")?.toLongOrNull()
         ?: 45_000L
 
-    // Se o CLIENTE continua mandando áudio normalmente (ligação viva) mas a GEMINI para de
-    // responder por esse tempo, consideramos a chave atual "lenta/travada" e trocamos pra
-    // próxima da lista (gratuita-1 -> gratuita-2 -> paga), sem derrubar o cliente e sem
-    // perder o histórico da conversa — é isso que evita a Megan ficar "pensando" pra sempre.
+    // Conta a partir do instante em que existe uma "pergunta pendente" pra Gemini responder —
+    // o aluno acabou de terminar de falar (VAD por energia, ver [ClientSpeechDetector]) OU o
+    // próprio servidor acabou de mandar a saudação/retomada (ver [attemptSession]) — e não do
+    // simples fato de não ter chegado nenhum frame da Gemini. Sem essa distinção, o watchdog
+    // trocava de chave mesmo com o aluno em silêncio normal (ele não tinha dito nada, a Gemini
+    // não tinha nada pra responder — não é "travada"), que foi exatamente o relato do usuário:
+    // às vezes a troca acontecia por lentidão real da Gemini, às vezes só porque o aluno ainda
+    // não tinha falado. Se o aluno continua mandando áudio normalmente (ligação viva) mas a
+    // GEMINI demora mais que esse tempo pra responder a algo que já foi dito, consideramos a
+    // chave atual "lenta/travada" e trocamos pra próxima da lista (gratuita-1 -> gratuita-2 ->
+    // paga), sem derrubar o cliente e sem perder o histórico da conversa.
     //
     // 22s (não 9s, valor inicial que usamos e que se mostrou baixo demais): logs reais de
     // produção (08/09/2026) mostraram a Gemini demorando ROTINEIRAMENTE entre 9 e 11s pra
@@ -173,6 +182,13 @@ class GeminiLiveBridge {
         val lastFromGeminiAt = AtomicLong(System.currentTimeMillis())
         val clientDisconnected = AtomicBoolean(false)
 
+        // 0L = não há nenhuma "pergunta pendente" no momento (aluno em silêncio normal, ou a
+        // Gemini já respondeu tudo que foi dito) — só != 0L enquanto existir algo que a Gemini
+        // ainda não respondeu (ver comentário de [responseTimeoutMillis] e [ClientSpeechDetector]
+        // logo abaixo).
+        val awaitingGeminiResponseSince = AtomicLong(0L)
+        val speechDetector = ClientSpeechDetector()
+
         // Numa troca de chave no meio da ligação, o [systemInstruction] original (ver
         // MeganPersona.kt) ainda manda a Megan "estruturar a ligação" com saudação +
         // explicação de abertura — isso tem prioridade MAIOR que um simples turno de usuário
@@ -199,6 +215,10 @@ class GeminiLiveBridge {
             // troca de chave no meio da conversa: um resumo do que já foi dito, pra ela
             // continuar de onde parou em vez de se reapresentar como se fosse uma ligação nova.
             send(Frame.Text(history.buildPrimingMessage().toString()))
+            // Essa mensagem em si já é uma "pergunta pendente": o servidor está esperando a
+            // Gemini reagir (saudação inicial ou retomada) — conta como início do timeout de
+            // resposta, do mesmo jeito que o fim de uma fala do aluno conta (ver abaixo).
+            awaitingGeminiResponseSince.set(System.currentTimeMillis())
 
             coroutineScope {
                 val toGemini = launch {
@@ -207,6 +227,18 @@ class GeminiLiveBridge {
                         for (frame in clientSession.incoming) {
                             lastFromClientAt.set(System.currentTimeMillis())
                             logFrame("cliente->gemini", frame, audioFrames) { audioFrames++ }
+                            extractClientAudioPcm(frame)?.let { pcm ->
+                                if (speechDetector.onAudioChunk(pcm)) {
+                                    // Transição falando -> silêncio sustentado: o aluno acabou
+                                    // de terminar de falar/perguntar algo — só AGORA existe uma
+                                    // resposta pendente da Gemini pra valer (ver [responseTimeoutMillis]).
+                                    awaitingGeminiResponseSince.set(System.currentTimeMillis())
+                                    MeganLog.d(
+                                        "[Megan][vad] Aluno terminou de falar (chave: ${entry.label}) — " +
+                                            "aguardando resposta da Gemini a partir de agora."
+                                    )
+                                }
+                            }
                             try {
                                 send(frame)
                             } catch (e: Exception) {
@@ -234,6 +266,14 @@ class GeminiLiveBridge {
                         for (frame in incoming) {
                             lastFromGeminiAt.set(System.currentTimeMillis())
                             history.absorb(frame)
+                            if (frameIsGeminiResponseContent(frame)) {
+                                // A Gemini respondeu de verdade (áudio, transcrição da própria
+                                // fala dela, ou fim de turno) — a "pergunta pendente" foi
+                                // atendida, zera o timeout de resposta. Não conta a transcrição
+                                // do que o ALUNO disse (inputTranscription): isso só confirma
+                                // que a Gemini ouviu, não que ela respondeu.
+                                awaitingGeminiResponseSince.set(0L)
+                            }
                             logFrame("gemini->cliente", frame, audioFrames) { audioFrames++ }
                             clientSession.send(frame)
                         }
@@ -250,8 +290,14 @@ class GeminiLiveBridge {
                         delay(2_000)
                         val now = System.currentTimeMillis()
                         val idleAmbos = now - maxOf(lastFromClientAt.get(), lastFromGeminiAt.get())
-                        val semRespostaDaGemini = now - lastFromGeminiAt.get()
-                        val clienteAindaAtivo = (now - lastFromClientAt.get()) < idleTimeoutMillis
+                        val awaitingSince = awaitingGeminiResponseSince.get()
+                        // Só existe demora "de verdade" a medir enquanto houver uma pergunta
+                        // pendente (aluno acabou de falar, ou o servidor acabou de mandar a
+                        // saudação/retomada) — ver comentário de [responseTimeoutMillis].
+                        // awaitingSince == 0L quer dizer "aluno em silêncio normal, nada a
+                        // responder" e nunca deve, por si só, disparar troca de chave.
+                        val aguardandoRespostaPendente = awaitingSince != 0L
+                        val demoraDaRespostaPendente = if (aguardandoRespostaPendente) now - awaitingSince else 0L
 
                         if (idleAmbos >= idleTimeoutMillis) {
                             MeganLog.d(
@@ -271,10 +317,11 @@ class GeminiLiveBridge {
                             break
                         }
 
-                        if (semRespostaDaGemini >= responseTimeoutMillis && clienteAindaAtivo) {
+                        if (aguardandoRespostaPendente && demoraDaRespostaPendente >= responseTimeoutMillis) {
                             MeganLog.d(
-                                "[Megan] Gemini sem responder há ${semRespostaDaGemini}ms (chave: ${entry.label}), " +
-                                    "mas o cliente continua ativo — trocando de chave sem derrubar a ligação."
+                                "[Megan] Gemini sem responder há ${demoraDaRespostaPendente}ms desde que o aluno " +
+                                    "falou/perguntou algo (chave: ${entry.label}) — trocando de chave sem " +
+                                    "derrubar a ligação."
                             )
                             runCatching { close(CloseReason(CloseReason.Codes.NORMAL, "Resposta lenta — trocando de chave")) }
                             toGemini.cancel()
@@ -332,6 +379,41 @@ class GeminiLiveBridge {
         }
     }
 
+    /** Extrai o PCM16 cru de um frame `realtimeInput.audio.data` (áudio do cliente/aluno), ou
+     *  `null` se o frame não for esse tipo — usado pelo [ClientSpeechDetector] no watchdog de
+     *  resposta (ver [responseTimeoutMillis]). */
+    private fun extractClientAudioPcm(frame: Frame): ByteArray? {
+        if (frame !is Frame.Text) return null
+        val text = String(frame.data, Charsets.UTF_8)
+        if (!text.contains("\"realtimeInput\"")) return null
+        val json = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return null
+        val base64 = json["realtimeInput"]?.jsonObject
+            ?.get("audio")?.jsonObject
+            ?.get("data")?.jsonPrimitive?.contentOrNull ?: return null
+        return runCatching { Base64.getDecoder().decode(base64) }.getOrNull()
+    }
+
+    /** true só quando o frame da GEMINI carrega uma resposta de verdade — áudio da Megan
+     *  (binário, ou `modelTurn.parts` em texto), a transcrição da própria fala dela
+     *  (`outputTranscription`), ou fim de turno (`turnComplete`). Propositalmente NÃO conta
+     *  `inputTranscription` (transcrição do que o ALUNO disse): isso só confirma que a Gemini
+     *  ouviu, não que ela respondeu — ver uso em [attemptSession]. */
+    private fun frameIsGeminiResponseContent(frame: Frame): Boolean {
+        if (frame is Frame.Binary) return true
+        if (frame !is Frame.Text) return false
+        val json = runCatching { Json.parseToJsonElement(String(frame.data, Charsets.UTF_8)).jsonObject }.getOrNull()
+            ?: return false
+        val serverContent = json["serverContent"]?.jsonObject ?: return false
+
+        val temTranscricaoDaMegan = serverContent["outputTranscription"]?.jsonObject
+            ?.get("text")?.jsonPrimitive?.contentOrNull?.isNotEmpty() == true
+        val temAudioDaMegan = serverContent["modelTurn"]?.jsonObject
+            ?.get("parts")?.jsonArray?.isNotEmpty() == true
+        val turnComplete = serverContent["turnComplete"]?.jsonPrimitive?.booleanOrNull == true
+
+        return temTranscricaoDaMegan || temAudioDaMegan || turnComplete
+    }
+
     private fun buildSetupMessage(systemInstruction: String) = buildJsonObject {
         putJsonObject("setup") {
             put("model", model)
@@ -357,6 +439,54 @@ class GeminiLiveBridge {
 }
 
 /**
+ * Réplica, do lado do servidor, do VAD (voice activity detection) por energia RMS que já roda
+ * no cliente (ver `pcm-worklet.js` no app) — mesmos limiares, sobre os mesmos chunks PCM16
+ * (~100ms) que o cliente manda como `realtimeInput.audio.data`. Existe pra dar ao watchdog de
+ * [GeminiLiveBridge.attemptSession] um jeito de saber quando o aluno REALMENTE terminou de
+ * falar/perguntar algo, em vez de só olhar "chegou algum frame do cliente" — o microfone manda
+ * áudio (inclusive silêncio) o tempo todo, então a mera chegada de frames nunca serviu pra
+ * distinguir "aluno esperando resposta" de "aluno quieto, nada a responder". Roda inteiramente
+ * no processo do servidor: não depende de nenhuma mudança no app.
+ *
+ * Uma instância por tentativa de sessão ([ClientSpeechDetector] não é `@Synchronized`: só é
+ * chamada a partir da coroutine `toGemini`, nunca concorrentemente).
+ */
+private class ClientSpeechDetector {
+    private val silenceThreshold = 0.02
+    private val silenceChunksToEnd = 5
+    private var silentChunkCount = 0
+    private var speaking = false
+
+    /** Processa um chunk de áudio do cliente (PCM16 little-endian); retorna `true` só no exato
+     *  instante em que a fala termina (transição falando -> silêncio sustentado). */
+    fun onAudioChunk(pcm16: ByteArray): Boolean {
+        val sampleCount = pcm16.size / 2
+        if (sampleCount == 0) return false
+
+        var sumSquares = 0.0
+        for (i in 0 until sampleCount) {
+            val lo = pcm16[i * 2].toInt() and 0xFF
+            val hi = pcm16[i * 2 + 1].toInt()
+            val sample = ((hi shl 8) or lo).toShort().toDouble() / 32768.0
+            sumSquares += sample * sample
+        }
+        val rms = Math.sqrt(sumSquares / sampleCount)
+
+        if (rms < silenceThreshold) {
+            silentChunkCount++
+            if (speaking && silentChunkCount >= silenceChunksToEnd) {
+                speaking = false
+                return true
+            }
+        } else {
+            silentChunkCount = 0
+            speaking = true
+        }
+        return false
+    }
+}
+
+/**
  * Acumula a transcrição da conversa (lado do aluno e da Megan) a partir dos frames que a
  * Gemini manda de volta (`serverContent.inputTranscription`/`outputTranscription`, finalizados
  * a cada `turnComplete`) — é o "cache da sessão": quando uma troca de chave acontece no meio da
@@ -375,11 +505,16 @@ class ConversationHistory {
     /** Só guarda as últimas rodadas — o resumo não precisa (nem deve) crescer sem limite. */
     private val maxTurnsToReplay = 24
 
-    /** true assim que pelo menos uma rodada completa foi absorvida — usado pra saber se essa
-     *  é a primeira tentativa da ligação (persona normal) ou uma retomada (persona ajustada
-     *  pra não reiniciar a chamada — ver [GeminiLiveBridge.attemptSession]). */
+    /** true assim que existir QUALQUER conteúdo de transcrição acumulado — rodada fechada
+     *  (`turns`) OU só o que já chegou da rodada em andamento (`userBuffer`/`modelBuffer`).
+     *  Importante não depender só de `turnComplete` ter disparado: numa conversa de voz
+     *  contínua/interruptível a Gemini pode levar muito tempo (ou nunca, se a chave trocar no
+     *  meio da fala) pra mandar esse sinal — sem isso, uma ligação de vários minutos podia
+     *  virar "retomando histórico: false" mesmo já tendo bastante conversa acumulada nos
+     *  buffers ainda não fechados. Usado pra decidir entre persona normal e persona de
+     *  retomada — ver [GeminiLiveBridge.attemptSession]. */
     @Synchronized
-    fun hasContent(): Boolean = turns.isNotEmpty()
+    fun hasContent(): Boolean = turns.isNotEmpty() || userBuffer.isNotEmpty() || modelBuffer.isNotEmpty()
 
     @Synchronized
     fun absorb(frame: Frame) {
@@ -409,11 +544,13 @@ class ConversationHistory {
     /**
      * Mensagem `clientContent` pra mandar assim que uma sessão com a Gemini abre. Na primeira
      * chave tentada (histórico ainda vazio) é só "Hi!", pra Megan puxar assunto normalmente —
-     * igual sempre foi. Numa troca de chave no meio da ligação, é um resumo do que já foi dito.
+     * igual sempre foi. Numa troca de chave no meio da ligação, é um resumo do que já foi dito
+     * — incluindo o que ainda estava "em andamento" (sem `turnComplete`) no momento da troca,
+     * não só as rodadas já fechadas, pra não perder o fim da conversa numa troca no meio da fala.
      */
     @Synchronized
     fun buildPrimingMessage(): JsonObject {
-        val text = if (turns.isEmpty()) {
+        val text = if (!hasContent()) {
             "Hi!"
         } else {
             buildString {
@@ -425,6 +562,11 @@ class ConversationHistory {
                 for ((role, content) in turns.takeLast(maxTurnsToReplay)) {
                     append(role).append(": ").append(content).append('\n')
                 }
+                // Conteúdo que ainda não tinha fechado turno quando a troca aconteceu — sem
+                // isso, o finalzinho da conversa (bem o que motivou a lentidão, às vezes) se
+                // perdia mesmo com o resto do histórico presente.
+                if (userBuffer.isNotEmpty()) append("Aluno (em andamento): ").append(userBuffer).append('\n')
+                if (modelBuffer.isNotEmpty()) append("Megan (em andamento): ").append(modelBuffer).append('\n')
                 append(')')
             }
         }
