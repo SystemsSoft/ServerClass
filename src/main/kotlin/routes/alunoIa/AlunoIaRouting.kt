@@ -34,6 +34,10 @@ data class AssinaturaStatusDto(
 @Serializable
 data class PortalAssinaturaDto(val url: String)
 
+/** Resposta de GET /aluno-ia/total — apenas um agregado, sem dado pessoal. */
+@Serializable
+data class AlunosTotalDto(val total: Long)
+
 fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
     routing {
 
@@ -44,6 +48,19 @@ fun Application.alunoIaRouting(alunoIaService: AlunoIaService) {
                 call.respond(HttpStatusCode.OK, alunos)
             } catch (e: Throwable) {
                 call.respond(HttpStatusCode.InternalServerError, "Erro ao buscar alunos: ${e.message}")
+            }
+        }
+
+        // ── GET /aluno-ia/total ──────────────────────────────────────────────
+        // Só a contagem de alunos cadastrados, sem nenhum dado pessoal: é a
+        // prova social exibida na home pública do app (por isso sem auth).
+        // Declarado ANTES de /aluno-ia/{userId} para deixar explícito que
+        // "total" é um segmento fixo, não um userId.
+        get("/aluno-ia/total") {
+            try {
+                call.respond(HttpStatusCode.OK, AlunosTotalDto(total = alunoIaService.countAll()))
+            } catch (e: Throwable) {
+                call.respond(HttpStatusCode.InternalServerError, "Erro ao contar alunos: ${e.message}")
             }
         }
 

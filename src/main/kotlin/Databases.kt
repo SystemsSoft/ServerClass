@@ -14,6 +14,7 @@ import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.EbookPaidSessionService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
 import services.GeminiLiveBridge
 import services.GeminiTranslationService
@@ -102,4 +103,13 @@ object DatabaseConfig {
     val resolvebr = module {}
 
     val inovaCloud = module {}
+
+    val sentinela = module {
+        single(named("SentinelaDB")) {
+            // Mesmo host/usuário/senha do banco principal, banco próprio do Sentinela.
+            conectarBanco("sentinela_db", maxConexoes = 5)
+        }
+
+        single { SentinelaUserService(get(named("SentinelaDB"))) }
+    }
 }

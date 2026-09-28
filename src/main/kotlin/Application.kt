@@ -7,6 +7,7 @@ import com.class_erp.DatabaseConfig.clientModule
 import com.class_erp.DatabaseConfig.estrelasLeiria
 import com.class_erp.DatabaseConfig.resolvebr
 import com.class_erp.DatabaseConfig.inovaCloud
+import com.class_erp.DatabaseConfig.sentinela
 import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
@@ -37,7 +38,9 @@ import schemas.classes.FlashcardService
 import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
+import routes.sentinela.sentinelaUserRouting
 import kotlin.getValue
 import org.koin.core.qualifier.named
 import routes.estrelasLeiria.adminTicketRouting
@@ -106,6 +109,7 @@ private fun Application.configureDependencyInjection() {
             estrelasLeiria,
             resolvebr,
             inovaCloud,
+            sentinela,
         )
     }
 }
@@ -118,8 +122,10 @@ private fun Application.configureRouting() {
     val flashcardService by inject<FlashcardService>()
     val alunoIaService by inject<AlunoIaService>()
     val geminiLiveBridge by inject<GeminiLiveBridge>()
+    val sentinelaUserService by inject<SentinelaUserService>()
 
     clientRouting(clientService)
+    sentinelaUserRouting(sentinelaUserService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
     uploadRouting(uploadListService)

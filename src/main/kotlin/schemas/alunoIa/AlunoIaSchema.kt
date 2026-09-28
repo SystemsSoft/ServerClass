@@ -129,6 +129,15 @@ class AlunoIaService(private val database: Database) {
         AlunoIaTable.selectAll().map { it.toDto() }
     }
 
+    // ── COUNT ────────────────────────────────────────────────────────────────
+    /**
+     * Só o total de alunos cadastrados — nenhum dado pessoal sai daqui.
+     * Usado pela prova social da home pública do app (ver GET /aluno-ia/total).
+     */
+    suspend fun countAll(): Long = dbQuery {
+        AlunoIaTable.selectAll().count()
+    }
+
     // ── UPDATE ───────────────────────────────────────────────────────────────
     suspend fun update(userId: String, aluno: AlunoIaDto): Int = dbQuery {
         AlunoIaTable.update({ AlunoIaTable.userId eq userId }) {

@@ -52,6 +52,9 @@ dependencies {
     implementation("com.google.zxing:javase:3.5.2")
     implementation("org.apache.commons:commons-email:1.5")
     implementation("com.github.librepdf:openpdf:1.3.30")
+    // Verificação de assinatura RS256 dos ID Tokens do Firebase Authentication
+    // (sem depender do Firebase Admin SDK / service account key).
+    implementation("com.auth0:java-jwt:4.4.0")
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
 }
