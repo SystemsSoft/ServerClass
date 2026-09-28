@@ -14,6 +14,7 @@ import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.EbookPaidSessionService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
 import services.GeminiLiveBridge
@@ -107,9 +108,10 @@ object DatabaseConfig {
     val sentinela = module {
         single(named("SentinelaDB")) {
             // Mesmo host/usuário/senha do banco principal, banco próprio do Sentinela.
-            conectarBanco("sentinela_db", maxConexoes = 5)
+            conectarBanco("sentinela_db", maxConexoes = 10)
         }
 
         single { SentinelaUserService(get(named("SentinelaDB"))) }
+        single { SentinelaRecordingService(get(named("SentinelaDB"))) }
     }
 }

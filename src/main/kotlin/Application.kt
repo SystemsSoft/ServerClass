@@ -38,8 +38,11 @@ import schemas.classes.FlashcardService
 import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
+import routes.sentinela.sentinelaRecordingRouting
+import routes.sentinela.sentinelaStreamRouting
 import routes.sentinela.sentinelaUserRouting
 import kotlin.getValue
 import org.koin.core.qualifier.named
@@ -123,9 +126,12 @@ private fun Application.configureRouting() {
     val alunoIaService by inject<AlunoIaService>()
     val geminiLiveBridge by inject<GeminiLiveBridge>()
     val sentinelaUserService by inject<SentinelaUserService>()
+    val sentinelaRecordingService by inject<SentinelaRecordingService>()
 
     clientRouting(clientService)
     sentinelaUserRouting(sentinelaUserService)
+    sentinelaStreamRouting(sentinelaRecordingService)
+    sentinelaRecordingRouting(sentinelaRecordingService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
     uploadRouting(uploadListService)
