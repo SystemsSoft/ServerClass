@@ -15,6 +15,7 @@ import schemas.classes.estrelasLeiria.EbookPaidSessionService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
 import schemas.sentinela.SentinelaRecordingService
+import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
 import services.GeminiLiveBridge
@@ -113,5 +114,6 @@ object DatabaseConfig {
 
         single { SentinelaUserService(get(named("SentinelaDB"))) }
         single { SentinelaRecordingService(get(named("SentinelaDB"))) }
+        single { SentinelaShareService(get(named("SentinelaDB"))) }
     }
 }

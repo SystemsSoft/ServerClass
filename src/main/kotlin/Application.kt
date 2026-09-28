@@ -39,9 +39,11 @@ import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
 import schemas.sentinela.SentinelaRecordingService
+import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
 import routes.sentinela.sentinelaRecordingRouting
+import routes.sentinela.sentinelaShareRouting
 import routes.sentinela.sentinelaStreamRouting
 import routes.sentinela.sentinelaUserRouting
 import kotlin.getValue
@@ -127,11 +129,13 @@ private fun Application.configureRouting() {
     val geminiLiveBridge by inject<GeminiLiveBridge>()
     val sentinelaUserService by inject<SentinelaUserService>()
     val sentinelaRecordingService by inject<SentinelaRecordingService>()
+    val sentinelaShareService by inject<SentinelaShareService>()
 
     clientRouting(clientService)
     sentinelaUserRouting(sentinelaUserService)
     sentinelaStreamRouting(sentinelaRecordingService)
-    sentinelaRecordingRouting(sentinelaRecordingService)
+    sentinelaRecordingRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService)
+    sentinelaShareRouting(sentinelaShareService, sentinelaUserService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
     uploadRouting(uploadListService)
