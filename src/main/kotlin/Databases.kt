@@ -14,6 +14,7 @@ import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.EbookPaidSessionService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
@@ -115,5 +116,6 @@ object DatabaseConfig {
         single { SentinelaUserService(get(named("SentinelaDB"))) }
         single { SentinelaRecordingService(get(named("SentinelaDB"))) }
         single { SentinelaShareService(get(named("SentinelaDB"))) }
+        single { SentinelaPushTokenService(get(named("SentinelaDB"))) }
     }
 }

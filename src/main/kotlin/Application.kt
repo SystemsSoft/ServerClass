@@ -38,10 +38,12 @@ import schemas.classes.FlashcardService
 import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
+import routes.sentinela.sentinelaLiveRouting
 import routes.sentinela.sentinelaRecordingRouting
 import routes.sentinela.sentinelaShareRouting
 import routes.sentinela.sentinelaStreamRouting
@@ -130,10 +132,12 @@ private fun Application.configureRouting() {
     val sentinelaUserService by inject<SentinelaUserService>()
     val sentinelaRecordingService by inject<SentinelaRecordingService>()
     val sentinelaShareService by inject<SentinelaShareService>()
+    val sentinelaPushTokenService by inject<SentinelaPushTokenService>()
 
     clientRouting(clientService)
     sentinelaUserRouting(sentinelaUserService)
-    sentinelaStreamRouting(sentinelaRecordingService)
+    sentinelaStreamRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
+    sentinelaLiveRouting(sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
     sentinelaRecordingRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService)
     sentinelaShareRouting(sentinelaShareService, sentinelaUserService)
     accessRouting(serviceAccess)
