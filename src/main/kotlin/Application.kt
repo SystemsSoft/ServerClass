@@ -45,6 +45,7 @@ import schemas.sentinela.SentinelaUserService
 import services.SentinelaTranscriptionService
 import schemas.users.ClientService
 import routes.sentinela.sentinelaLiveRouting
+import routes.sentinela.sentinelaPublicVideoRouting
 import routes.sentinela.sentinelaRecordingRouting
 import routes.sentinela.sentinelaShareRouting
 import routes.sentinela.sentinelaStreamRouting
@@ -142,6 +143,7 @@ private fun Application.configureRouting() {
     sentinelaTranscriptionService.resumePending()
     sentinelaLiveRouting(sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
     sentinelaRecordingRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService)
+    sentinelaPublicVideoRouting(sentinelaRecordingService)
     sentinelaShareRouting(sentinelaShareService, sentinelaUserService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
