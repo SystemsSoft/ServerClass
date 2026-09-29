@@ -20,7 +20,9 @@ import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
 import schemas.users.ClientService
 import services.GeminiLiveBridge
+import services.GeminiAudioTranscriber
 import services.GeminiTranslationService
+import services.SentinelaTranscriptionService
 
 
 object DatabaseConfig {
@@ -117,5 +119,7 @@ object DatabaseConfig {
         single { SentinelaRecordingService(get(named("SentinelaDB"))) }
         single { SentinelaShareService(get(named("SentinelaDB"))) }
         single { SentinelaPushTokenService(get(named("SentinelaDB"))) }
+        single { GeminiAudioTranscriber() }
+        single { SentinelaTranscriptionService(get(), get()) }
     }
 }

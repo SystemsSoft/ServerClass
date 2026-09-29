@@ -42,6 +42,7 @@ import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
+import services.SentinelaTranscriptionService
 import schemas.users.ClientService
 import routes.sentinela.sentinelaLiveRouting
 import routes.sentinela.sentinelaRecordingRouting
@@ -133,10 +134,12 @@ private fun Application.configureRouting() {
     val sentinelaRecordingService by inject<SentinelaRecordingService>()
     val sentinelaShareService by inject<SentinelaShareService>()
     val sentinelaPushTokenService by inject<SentinelaPushTokenService>()
+    val sentinelaTranscriptionService by inject<SentinelaTranscriptionService>()
 
     clientRouting(clientService)
     sentinelaUserRouting(sentinelaUserService)
-    sentinelaStreamRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
+    sentinelaStreamRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaPushTokenService, sentinelaTranscriptionService)
+    sentinelaTranscriptionService.resumePending()
     sentinelaLiveRouting(sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
     sentinelaRecordingRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService)
     sentinelaShareRouting(sentinelaShareService, sentinelaUserService)
