@@ -142,7 +142,7 @@ private fun Application.configureRouting() {
     sentinelaStreamRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaPushTokenService, sentinelaTranscriptionService)
     sentinelaTranscriptionService.resumePending()
     sentinelaLiveRouting(sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
-    sentinelaRecordingRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService)
+    sentinelaRecordingRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaTranscriptionService)
     sentinelaPublicVideoRouting(sentinelaRecordingService)
     sentinelaShareRouting(sentinelaShareService, sentinelaUserService)
     accessRouting(serviceAccess)
