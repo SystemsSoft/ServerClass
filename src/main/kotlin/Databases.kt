@@ -14,6 +14,7 @@ import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.EbookPaidSessionService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaBillingService
 import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaShareService
@@ -22,6 +23,7 @@ import schemas.users.ClientService
 import services.GeminiLiveBridge
 import services.GeminiAudioTranscriber
 import services.GeminiTranslationService
+import services.SentinelaStripe
 import services.SentinelaTranscriptionService
 
 
@@ -119,6 +121,8 @@ object DatabaseConfig {
         single { SentinelaRecordingService(get(named("SentinelaDB"))) }
         single { SentinelaShareService(get(named("SentinelaDB"))) }
         single { SentinelaPushTokenService(get(named("SentinelaDB"))) }
+        single { SentinelaBillingService(get(named("SentinelaDB"))) }
+        single { SentinelaStripe(get()) }
         single { GeminiAudioTranscriber() }
         single { SentinelaTranscriptionService(get(), get()) }
     }

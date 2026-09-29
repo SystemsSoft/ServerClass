@@ -38,17 +38,21 @@ import schemas.classes.FlashcardService
 import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
+import schemas.sentinela.SentinelaBillingService
 import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
+import services.SentinelaStripe
 import services.SentinelaTranscriptionService
 import schemas.users.ClientService
 import routes.sentinela.sentinelaLiveRouting
+import routes.sentinela.sentinelaBillingRouting
 import routes.sentinela.sentinelaPublicVideoRouting
 import routes.sentinela.sentinelaRecordingRouting
 import routes.sentinela.sentinelaShareRouting
 import routes.sentinela.sentinelaStreamRouting
+import routes.sentinela.sentinelaStripeWebhookRouting
 import routes.sentinela.sentinelaUserRouting
 import kotlin.getValue
 import org.koin.core.qualifier.named
@@ -136,14 +140,18 @@ private fun Application.configureRouting() {
     val sentinelaShareService by inject<SentinelaShareService>()
     val sentinelaPushTokenService by inject<SentinelaPushTokenService>()
     val sentinelaTranscriptionService by inject<SentinelaTranscriptionService>()
+    val sentinelaBillingService by inject<SentinelaBillingService>()
+    val sentinelaStripe by inject<SentinelaStripe>()
 
     clientRouting(clientService)
     sentinelaUserRouting(sentinelaUserService)
-    sentinelaStreamRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaPushTokenService, sentinelaTranscriptionService)
+    sentinelaStreamRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaPushTokenService, sentinelaTranscriptionService, sentinelaBillingService)
     sentinelaTranscriptionService.resumePending()
     sentinelaLiveRouting(sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
     sentinelaRecordingRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaTranscriptionService)
     sentinelaPublicVideoRouting(sentinelaRecordingService)
+    sentinelaBillingRouting(sentinelaBillingService, sentinelaStripe)
+    sentinelaStripeWebhookRouting(sentinelaBillingService, sentinelaStripe)
     sentinelaShareRouting(sentinelaShareService, sentinelaUserService)
     accessRouting(serviceAccess)
     classesRouting(classesListService)
