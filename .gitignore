@@ -39,5 +39,6 @@ out/
 aws-credentials.properties
 gemini-credentials.properties
 stripe-credentials.properties
+sentinela-email.properties
 firebase-service-account.json
 local.properties

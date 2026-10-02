@@ -23,6 +23,7 @@ import schemas.users.ClientService
 import services.GeminiLiveBridge
 import services.GeminiAudioTranscriber
 import services.GeminiTranslationService
+import services.SentinelaPasswordReset
 import services.SentinelaStripe
 import services.SentinelaTranscriptionService
 
@@ -123,6 +124,7 @@ object DatabaseConfig {
         single { SentinelaPushTokenService(get(named("SentinelaDB"))) }
         single { SentinelaBillingService(get(named("SentinelaDB"))) }
         single { SentinelaStripe(get()) }
+        single { SentinelaPasswordReset(get()) }
         single { GeminiAudioTranscriber() }
         single { SentinelaTranscriptionService(get(), get()) }
     }

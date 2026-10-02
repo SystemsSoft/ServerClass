@@ -43,10 +43,12 @@ import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
+import services.SentinelaPasswordReset
 import services.SentinelaStripe
 import services.SentinelaTranscriptionService
 import schemas.users.ClientService
 import routes.sentinela.sentinelaLiveRouting
+import routes.sentinela.sentinelaPasswordResetRouting
 import routes.sentinela.sentinelaBillingRouting
 import routes.sentinela.sentinelaPublicVideoRouting
 import routes.sentinela.sentinelaRecordingRouting
@@ -92,6 +94,7 @@ fun Application.module() {
     loadLocalSecrets("aws-credentials.properties")
     loadLocalSecrets("gemini-credentials.properties")
     loadLocalSecrets("stripe-credentials.properties")
+    loadLocalSecrets("sentinela-email.properties")
     (System.getProperty("stripe.apiKey") ?: System.getenv("STRIPE_API_KEY"))?.let {
         com.stripe.Stripe.apiKey = it
     }
@@ -142,9 +145,11 @@ private fun Application.configureRouting() {
     val sentinelaTranscriptionService by inject<SentinelaTranscriptionService>()
     val sentinelaBillingService by inject<SentinelaBillingService>()
     val sentinelaStripe by inject<SentinelaStripe>()
+    val sentinelaPasswordReset by inject<SentinelaPasswordReset>()
 
     clientRouting(clientService)
     sentinelaUserRouting(sentinelaUserService)
+    sentinelaPasswordResetRouting(sentinelaPasswordReset)
     sentinelaStreamRouting(sentinelaRecordingService, sentinelaShareService, sentinelaUserService, sentinelaPushTokenService, sentinelaTranscriptionService, sentinelaBillingService)
     sentinelaTranscriptionService.resumePending()
     sentinelaLiveRouting(sentinelaShareService, sentinelaUserService, sentinelaPushTokenService)
