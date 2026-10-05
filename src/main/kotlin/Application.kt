@@ -7,6 +7,7 @@ import com.class_erp.DatabaseConfig.clientModule
 import com.class_erp.DatabaseConfig.estrelasLeiria
 import com.class_erp.DatabaseConfig.resolvebr
 import com.class_erp.DatabaseConfig.inovaCloud
+import com.class_erp.DatabaseConfig.secretaria
 import com.class_erp.DatabaseConfig.sentinela
 import com.class_erp.schemas.AccessService
 import io.ktor.serialization.kotlinx.json.json
@@ -47,6 +48,7 @@ import services.SentinelaPasswordReset
 import services.SentinelaStripe
 import services.SentinelaTranscriptionService
 import schemas.users.ClientService
+import routes.secretaria.configureSecretaria
 import routes.sentinela.sentinelaLiveRouting
 import routes.sentinela.sentinelaPasswordResetRouting
 import routes.sentinela.sentinelaBillingRouting
@@ -95,6 +97,7 @@ fun Application.module() {
     loadLocalSecrets("gemini-credentials.properties")
     loadLocalSecrets("stripe-credentials.properties")
     loadLocalSecrets("sentinela-email.properties")
+    loadLocalSecrets("secretaria-credentials.properties")
     (System.getProperty("stripe.apiKey") ?: System.getenv("STRIPE_API_KEY"))?.let {
         com.stripe.Stripe.apiKey = it
     }
@@ -104,6 +107,10 @@ fun Application.module() {
     configureDependencyInjection()
     configureRouting()
     configureRoutingEstrelasLeiria()
+    // Isolado de propósito: este servidor atende outros produtos; se o módulo da SecretárIA não subir
+    // (ex.: banco inacessível), ele fica desligado e o resto continua no ar.
+    runCatching { configureSecretaria() }
+        .onFailure { println("[Secretaria] Módulo desativado — falha ao iniciar: ${it.message}") }
 }
 
 fun Application.configureContentNegotiation() {
@@ -126,6 +133,7 @@ private fun Application.configureDependencyInjection() {
             resolvebr,
             inovaCloud,
             sentinela,
+            secretaria,
         )
     }
 }
