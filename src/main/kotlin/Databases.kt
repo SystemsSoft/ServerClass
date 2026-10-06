@@ -19,25 +19,7 @@ import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
 import schemas.sentinela.SentinelaShareService
 import schemas.sentinela.SentinelaUserService
-import schemas.secretaria.SecretariaAppointmentService
-import schemas.secretaria.SecretariaAuthService
-import schemas.secretaria.SecretariaCallService
-import schemas.secretaria.SecretariaCatalogService
-import schemas.secretaria.SecretariaClinicService
-import schemas.secretaria.SecretariaPatientService
-import schemas.secretaria.SecretariaPlanService
-import schemas.secretaria.SecretariaReportService
-import schemas.secretaria.SecretariaSettingsService
-import schemas.secretaria.SecretariaTeamService
-import schemas.secretaria.SecretariaDashboardService
-import schemas.secretaria.SecretariaSchema
-import schemas.secretaria.SecretariaTokens
 import schemas.users.ClientService
-import services.secretaria.SecretariaCallHandler
-import services.secretaria.SecretariaCallRegistry
-import services.secretaria.SecretariaLiveBridge
-import services.secretaria.SecretariaLiveConfig
-import services.secretaria.SecretariaToolExecutor
 import services.GeminiLiveBridge
 import services.GeminiAudioTranscriber
 import services.GeminiTranslationService
@@ -147,34 +129,5 @@ object DatabaseConfig {
         single { SentinelaTranscriptionService(get(), get()) }
     }
 
-    val secretaria = module {
-        single(named("SecretariaDB")) {
-            // Banco próprio da SecretárIA (criado se não existir); as tabelas são criadas na partida.
-            conectarBanco("secretaria_db", maxConexoes = 10).also { SecretariaSchema.create(it) }
-        }
-
-        single { SecretariaTokens.fromConfig() }
-        single { SecretariaAuthService(get(named("SecretariaDB")), get()) }
-        single { SecretariaClinicService(get(named("SecretariaDB"))) }
-        single { SecretariaAppointmentService(get(named("SecretariaDB"))) }
-        single { SecretariaCallService(get(named("SecretariaDB"))) }
-        single { SecretariaSettingsService(get(named("SecretariaDB")), geminiConfigured = { SecretariaLiveConfig.keysFromConfig().isNotEmpty() }) }
-        single { SecretariaTeamService(get(named("SecretariaDB"))) }
-        single { SecretariaCatalogService(get(named("SecretariaDB"))) }
-        single { SecretariaPatientService(get(named("SecretariaDB")), get()) }
-        single { SecretariaPlanService(get(named("SecretariaDB")), get()) }
-        single { SecretariaReportService(get(named("SecretariaDB"))) }
-        single { SecretariaDashboardService(get(), get(), get(), get()) }
-        single { SecretariaCallRegistry() }
-        single { SecretariaToolExecutor(get(), get(), get()) }
-        single { SecretariaLiveBridge(get(), get()) }
-        single {
-            SecretariaCallHandler(
-                calls = get(), clinics = get(), settings = get(), bridge = get(), registry = get(),
-                model = SecretariaLiveConfig().model,
-                maxConcurrentCalls = (System.getProperty("secretaria.maxConcurrentCalls") ?: System.getenv("SECRETARIA_MAX_CONCURRENT_CALLS"))
-                    ?.toIntOrNull() ?: 5,
-            )
-        }
-    }
+    // A SecretárIA virou um serviço próprio (subprojeto secretaria/, deploy-secretaria.sh): não sobe mais aqui.
 }

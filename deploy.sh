@@ -10,13 +10,29 @@ REMOTE_PATH="/home/$SERVER_USER/server-0.0.1.jar"
 # chave aqui local e rodar ./deploy.sh não tinha efeito nenhum: só o JAR
 # subia, o servidor continuava com o properties antigo que já estava lá.
 # Cada um é opcional — só envia os que existirem neste diretório.
-CREDENTIAL_FILES=("aws-credentials.properties" "gemini-credentials.properties" "stripe-credentials.properties" "sentinela-email.properties" "secretaria-credentials.properties" "firebase-service-account.json")
+CREDENTIAL_FILES=("aws-credentials.properties" "gemini-credentials.properties" "stripe-credentials.properties" "sentinela-email.properties" "firebase-service-account.json")
+
+# A SecretárIA virou serviço próprio (./deploy-secretaria.sh) e NÃO sobe mais neste servidor. Publicar este servidor
+# antes de o nginx encaminhar /secretaria para o serviço novo tira a SecretárIA do ar. Só segue se o /secretaria/health
+# público responder exatamente "ok" — esse endereço só existe no serviço novo (o código HTTP não basta: este servidor
+# responde 200 com a página do site para qualquer endereço desconhecido). Para pular: SKIP_SECRETARIA_CHECK=1 ./deploy.sh
+PUBLIC_API="https://api.effectiveenglishcourse.com"
+if [ "${SKIP_SECRETARIA_CHECK:-0}" != "1" ]; then
+  SECRETARIA_HEALTH=$(curl -s -m 15 "$PUBLIC_API/secretaria/health")
+  if [ "$SECRETARIA_HEALTH" != "ok" ]; then
+    echo "ABORTADO: $PUBLIC_API/secretaria/health não respondeu 'ok' (o serviço da SecretárIA não está atendendo por lá)."
+    echo "Primeiro publique a SecretárIA (./deploy-secretaria.sh) e aponte o nginx para ela (SECRETARIA.md, 'Serviço próprio')."
+    echo "Para publicar mesmo assim: SKIP_SECRETARIA_CHECK=1 ./deploy.sh"
+    exit 1
+  fi
+fi
 
 # Garante permissão correta na chave
 chmod 400 $KEY_FILE
 
 echo "--- [1/4] Building JAR ---"
-./gradlew shadowJar
+# ':shadowJar' = só o jar deste servidor (sem o ':', o Gradle também montaria o da SecretárIA)
+./gradlew :shadowJar
 
 if [ $? -ne 0 ]; then
     echo "Build failed!"
