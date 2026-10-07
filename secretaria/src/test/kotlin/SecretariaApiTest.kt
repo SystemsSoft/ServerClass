@@ -18,6 +18,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
@@ -615,6 +616,56 @@ class SecretariaApiTest {
             transaction(env.fx.db) { ClinicsTable.update({ ClinicsTable.id eq env.b.clinicId }) { it[active] = false } }
             assertEquals(listOf("Clínica Teste"), directory().map { it.text("name") })
             assertEquals(HttpStatusCode.NotFound, req(HttpMethod.Get, "/secretaria/public/$keyB").status)
+        }
+    }
+
+    @Test
+    fun `app do paciente - cadastro e consultas pelo CPF, foto no painel so da propria clinica e LGPD`() = runBlocking<Unit> {
+        val env = Env()
+        testApplication {
+            startSecretaria(env.fx)
+            val adminA = token("maria@clinica.test")
+            val adminB = token("dona@outra.test")
+            suspend fun save(body: String) = req(HttpMethod.Post, "/secretaria/public/patients", body = body)
+            val ana = """{"cpf":"529.982.247-25","name":"Ana Souza","phone":"(21) 98765-4321","email":"ana@exemplo.test","healthPlan":"Unimed","photo":"${SecretariaProfileTest.JPEG_DATA_URL}"}"""
+
+            // cadastro sem login, validado; o CPF vai no corpo
+            assertEquals(HttpStatusCode.BadRequest, save(ana.replace("529.982.247-25", "529.982.247-24")).status)
+            val saved = save(ana)
+            assertEquals(HttpStatusCode.OK, saved.status, saved.bodyAsText())
+            val profile = json(saved.bodyAsText()).jsonObject
+            assertEquals("52998224725", profile["cpf"]!!.jsonPrimitive.content)
+            assertTrue(profile["hasPhoto"]!!.jsonPrimitive.boolean)
+
+            // consultas do app
+            suspend fun mine(cpf: String) = req(HttpMethod.Post, "/secretaria/public/patients/appointments", body = """{"cpf":"$cpf"}""")
+            assertEquals(HttpStatusCode.NotFound, mine("390.533.447-05").status)
+            assertEquals(HttpStatusCode.BadRequest, mine("123").status)
+            assertEquals(0, json(mine("52998224725").bodyAsText()).jsonObject["upcoming"]!!.jsonArray.size)
+
+            // ela liga para a clínica A: a ficha nasce com CPF, convênio e foto
+            val patientId = env.fx.profiles.linkToClinic(env.a.clinicId, env.fx.profiles.find("52998224725")!!)
+            val list = json(req(HttpMethod.Get, "/secretaria/patients?clinicId=${env.a.clinicId}&q=98224", adminA).bodyAsText()).jsonObject
+            val item = list["items"]!!.jsonArray.single().jsonObject // busca também pelo CPF
+            assertEquals("52998224725", item["cpf"]!!.jsonPrimitive.content)
+            assertEquals("Unimed", item["healthPlan"]!!.jsonPrimitive.content)
+            assertTrue(item["hasPhoto"]!!.jsonPrimitive.boolean)
+
+            val photo = req(HttpMethod.Get, "/secretaria/patients/$patientId/photo?clinicId=${env.a.clinicId}", adminA)
+            assertEquals(HttpStatusCode.OK, photo.status)
+            assertEquals(SecretariaProfileTest.JPEG_DATA_URL, json(photo.bodyAsText()).jsonObject["photo"]!!.jsonPrimitive.content)
+            // a clínica B não vê a foto de paciente da A (nem pedindo pela A, nem pela própria)
+            assertEquals(HttpStatusCode.Forbidden, req(HttpMethod.Get, "/secretaria/patients/$patientId/photo?clinicId=${env.a.clinicId}", adminB).status)
+            assertEquals(HttpStatusCode.NotFound, req(HttpMethod.Get, "/secretaria/patients/$patientId/photo?clinicId=${env.b.clinicId}", adminB).status)
+            assertEquals(HttpStatusCode.Unauthorized, req(HttpMethod.Get, "/secretaria/patients/$patientId/photo?clinicId=${env.a.clinicId}").status)
+
+            // exclusão LGPD na clínica: some CPF, convênio e a ligação com o app (e a foto deixa de aparecer)
+            assertEquals(HttpStatusCode.NoContent, req(HttpMethod.Delete, "/secretaria/patients/$patientId?clinicId=${env.a.clinicId}", adminA).status)
+            val after = json(req(HttpMethod.Get, "/secretaria/patients/$patientId?clinicId=${env.a.clinicId}", adminA).bodyAsText()).jsonObject["patient"]!!.jsonObject
+            assertEquals("Paciente removido", after["name"]!!.jsonPrimitive.content)
+            assertEquals(JsonNull, after["cpf"])
+            assertFalse(after["hasPhoto"]!!.jsonPrimitive.boolean)
+            assertEquals(HttpStatusCode.NotFound, req(HttpMethod.Get, "/secretaria/patients/$patientId/photo?clinicId=${env.a.clinicId}", adminA).status)
         }
     }
 }

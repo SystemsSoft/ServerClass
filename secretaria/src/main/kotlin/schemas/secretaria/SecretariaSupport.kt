@@ -88,3 +88,54 @@ private val SPECIALTY_FILLER = setOf(
     "medico", "medica", "medicos", "medicas", "doutor", "doutora", "especialista", "especialistas",
     "especialidade", "consulta", "consultas", "marcar", "agendar", "quero", "preciso",
 )
+
+// ── cadastro do paciente no app ──────────────────────────────────────────────
+
+/** CPF só com os 11 dígitos, se for válido (não repetido e com os dígitos verificadores certos); senão null. */
+fun normalizeCpf(raw: String?): String? {
+    val d = raw?.filter { it.isDigit() } ?: return null
+    if (d.length != 11 || d.all { it == d[0] }) return null
+    fun check(len: Int): Int {
+        val sum = (0 until len).sumOf { (d[it] - '0') * (len + 1 - it) }
+        return ((sum * 10) % 11).let { if (it == 10) 0 else it }
+    }
+    return if (check(9) == d[9] - '0' && check(10) == d[10] - '0') d else null
+}
+
+private val EMAIL = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+
+fun isValidEmail(email: String): Boolean = email.length <= 160 && EMAIL.matches(email)
+
+/** "5521987654321" -> "(21) 98765-4321" (para a IA e as telas). */
+fun formatPhoneBr(digits: String?): String? {
+    val national = digits?.filter { it.isDigit() }?.let { if (it.startsWith("55") && it.length >= 12) it.drop(2) else it } ?: return null
+    return when (national.length) {
+        11 -> "(${national.take(2)}) ${national.substring(2, 7)}-${national.substring(7)}"
+        10 -> "(${national.take(2)}) ${national.substring(2, 6)}-${national.substring(6)}"
+        else -> national
+    }
+}
+
+/** Foto enviada pelo app: base64 puro ou data URL. Retorna bytes + tipo, ou o motivo da recusa. */
+sealed class PhotoUpload {
+    class Ok(val bytes: ByteArray, val type: String) : PhotoUpload()
+    class Invalid(val reason: String) : PhotoUpload()
+}
+
+const val MAX_PHOTO_BYTES = 300_000
+
+fun decodePhoto(data: String): PhotoUpload {
+    val base64 = data.substringAfter("base64,", data).filterNot { it.isWhitespace() }
+    val bytes = runCatching { java.util.Base64.getDecoder().decode(base64) }.getOrNull()
+        ?: return PhotoUpload.Invalid("Foto inválida.")
+    if (bytes.isEmpty()) return PhotoUpload.Invalid("Foto inválida.")
+    if (bytes.size > MAX_PHOTO_BYTES) return PhotoUpload.Invalid("Foto muito grande (máximo de ${MAX_PHOTO_BYTES / 1000} KB).")
+    fun startsWith(vararg b: Int) = bytes.size >= b.size && b.indices.all { bytes[it] == b[it].toByte() }
+    val type = when {
+        startsWith(0xFF, 0xD8, 0xFF) -> "image/jpeg"
+        startsWith(0x89, 0x50, 0x4E, 0x47) -> "image/png"
+        bytes.size >= 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP" -> "image/webp"
+        else -> return PhotoUpload.Invalid("Formato de foto não suportado (use JPEG, PNG ou WebP).")
+    }
+    return PhotoUpload.Ok(bytes, type)
+}

@@ -129,6 +129,33 @@ object DoctorSchedulesTable : Table("doctor_schedules") {
     }
 }
 
+/**
+ * Cadastro do paciente feito no app (PWA): um por CPF, vale para todas as clínicas. Quando o paciente liga para uma
+ * clínica, ela recebe uma cópia em [PatientsTable] (ligada por profileId); a foto fica só aqui.
+ */
+object PatientProfilesTable : Table("patient_profiles") {
+    val id = long("id").autoIncrement()
+
+    /** Só os 11 dígitos, já validados (dígitos verificadores). Identifica o paciente no app. */
+    val cpf = varchar("cpf", 11).uniqueIndex()
+    val name = varchar("name", 120)
+
+    /** Só dígitos, com DDI (ex.: 5521987654321). */
+    val phone = varchar("phone", 20)
+    val email = varchar("email", 160)
+
+    /** Plano de saúde ou convênio; "Particular" quando não tem. */
+    val healthPlan = varchar("health_plan", 80)
+
+    /** Foto já reduzida no celular (poucos KB). [photoType] = image/jpeg | image/png | image/webp, ou null sem foto. */
+    val photo = blob("photo").nullable()
+    val photoType = varchar("photo_type", 20).nullable()
+    val createdAt = long("created_at")
+    val updatedAt = long("updated_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
+
 object PatientsTable : Table("patients") {
     val id = long("id").autoIncrement()
     val clinicId = reference("clinic_id", ClinicsTable.id)
@@ -140,11 +167,18 @@ object PatientsTable : Table("patients") {
     val consentAt = long("consent_at").nullable()
     val createdAt = long("created_at")
 
+    /** Vindos do cadastro do app ([PatientProfilesTable]); nulos para quem só foi atendido por telefone/painel. */
+    val cpf = varchar("cpf", 11).nullable()
+    val healthPlan = varchar("health_plan", 80).nullable()
+    val profileId = long("profile_id").nullable()
+
     override val primaryKey = PrimaryKey(id)
 
     init {
         index(false, clinicId, phone)
         index(false, clinicId, name)
+        uniqueIndex(clinicId, cpf) // um paciente por CPF em cada clínica (vários nulos são permitidos)
+        index(false, profileId)
     }
 }
 
@@ -269,7 +303,7 @@ object SecretariaSchema {
         transaction(database) {
             SchemaUtils.createMissingTablesAndColumns(
                 ClinicsTable, ClinicSettingsTable, UsersTable, ClinicUsersTable, SpecialtiesTable, DoctorsTable,
-                DoctorSchedulesTable, PatientsTable, CallsTable, CallMessagesTable,
+                DoctorSchedulesTable, PatientProfilesTable, PatientsTable, CallsTable, CallMessagesTable,
                 AppointmentsTable, PlansTable, SubscriptionsTable, NotificationsTable,
                 withLogs = false, // o aviso de "índices extras" do Exposed é só ruído: as FKs já criam seus índices
             )

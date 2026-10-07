@@ -8,6 +8,7 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+import schemas.secretaria.PhotoDto
 import schemas.secretaria.AppointmentCreator
 import schemas.secretaria.AppointmentStatus
 import schemas.secretaria.BookResult
@@ -194,6 +195,15 @@ internal fun Route.operationRoutes(api: SecretariaApi) {
         val access = call.requireClinic(api) ?: return@get
         val id = call.idParam() ?: return@get call.bad("id inválido")
         call.respondResult(api.patients.detail(access.clinic, id))
+    }
+
+    /** Foto do paciente (cadastro do app) como data URL; 404 se não tiver ou não for desta clínica. */
+    get("/patients/{id}/photo") {
+        val access = call.requireClinic(api) ?: return@get
+        val id = call.idParam() ?: return@get call.bad("id inválido")
+        val photo = api.profiles.photoForPatient(access.clinic.id, id)
+            ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("Paciente sem foto"))
+        call.respond(PhotoDto(photo))
     }
 
     post("/patients") {

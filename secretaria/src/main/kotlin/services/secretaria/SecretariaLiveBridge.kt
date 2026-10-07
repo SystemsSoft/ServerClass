@@ -149,7 +149,7 @@ class SecretariaLiveBridge(
         var established = false
         try {
             http.webSocket(urlString = config.liveUrl(entry.key)) {
-                send(Frame.Text(GeminiLiveMessages.setup(config.model, voice ?: config.voice, instruction, SecretariaToolExecutor.declarations).toString()))
+                send(Frame.Text(GeminiLiveMessages.setup(config.model, voice ?: config.voice, instruction, SecretariaToolExecutor.declarationsFor(identified = ctx.caller != null)).toString()))
                 val ready = withTimeoutOrNull(config.setupTimeoutMillis) { awaitSetupComplete() } ?: false
                 check(ready) { "Gemini não confirmou o setup" }
                 established = true
@@ -158,7 +158,7 @@ class SecretariaLiveBridge(
                     put("type", "session_ready")
                     put("callId", ctx.callId)
                 }.toString()))
-                send(Frame.Text(GeminiLiveMessages.userText(SecretariaPersona.GREETING).toString()))
+                send(Frame.Text(GeminiLiveMessages.userText(SecretariaPersona.greeting(ctx.caller)).toString()))
                 relay(this, clientSession, ctx, buffer)
             }
             return Attempt.Finished

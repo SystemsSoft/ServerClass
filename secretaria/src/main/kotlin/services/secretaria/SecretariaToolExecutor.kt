@@ -34,7 +34,10 @@ import java.time.Instant
 import java.time.LocalDate
 
 /** Estado de uma chamada em andamento, compartilhado entre a ponte e as funções da IA. */
-class SecretariaCallContext(val clinic: ClinicInfo, val callId: Long, val startedAt: Long)
+class SecretariaCallContext(val clinic: ClinicInfo, val callId: Long, val startedAt: Long, val caller: CallerInfo? = null)
+
+/** Paciente que ligou pelo app já cadastrado (identificado pelo CPF): a IA não pede nome nem telefone. */
+data class CallerInfo(val patientId: Long, val name: String, val phone: String, val healthPlan: String)
 
 /**
  * Funções que a IA pode chamar durante a conversa. Toda escrita no banco passa por aqui — a IA nunca
@@ -154,12 +157,14 @@ class SecretariaToolExecutor(
     private suspend fun book(ctx: SecretariaCallContext, args: JsonObject): Result {
         val doctorId = args.long("medico_id") ?: return Result(fail("Falta o medico_id (use consultar_horarios_disponiveis)."))
         val start = parseLocalIso(args.str("inicio")) ?: return Result(fail("O 'inicio' deve ser AAAA-MM-DDTHH:MM: a data + \"T\" + um horário livre devolvido por consultar_horarios_disponiveis."))
-        val name = args.str("nome_paciente")?.trim()?.takeIf { it.split(' ').size >= 2 && it.length >= 5 }
+        val caller = ctx.caller
+        val name = caller?.name ?: args.str("nome_paciente")?.trim()?.takeIf { it.split(' ').size >= 2 && it.length >= 5 }
             ?: return Result(fail("Preciso do nome completo do paciente (nome e sobrenome)."))
-        val phone = normalizePhone(args.str("telefone_paciente"))
+        val phone = caller?.phone ?: normalizePhone(args.str("telefone_paciente"))
             ?: return Result(fail("Telefone inválido. Peça o número com DDD."))
 
-        val patientId = clinics.findOrCreatePatient(ctx.clinic.id, name, phone)
+        // quem ligou pelo app já está identificado pelo cadastro (CPF): a consulta é sempre dele
+        val patientId = caller?.patientId ?: clinics.findOrCreatePatient(ctx.clinic.id, name, phone)
         return when (val result = appointments.book(ctx.clinic, doctorId, patientId, start, AppointmentCreator.IA, ctx.callId, args.str("motivo"))) {
             is BookResult.Fail -> Result(fail(withAgendaHint(result.reason)))
             is BookResult.Ok -> {
@@ -266,6 +271,7 @@ class SecretariaToolExecutor(
      * enviado por SMS/WhatsApp antes de remarcar ou cancelar.
      */
     private suspend fun identifyPatients(ctx: SecretariaCallContext, args: JsonObject): Pair<List<Long>, String?> {
+        ctx.caller?.let { return listOf(it.patientId) to null } // pelo app: só as consultas de quem ligou
         val phone = normalizePhone(args.str("telefone_paciente")) ?: return emptyList<Long>() to "Telefone inválido. Peça o número com DDD."
         val name = args.str("nome_paciente")?.takeIf { it.isNotBlank() } ?: return emptyList<Long>() to "Preciso do nome completo do paciente."
         val ids = clinics.patientsByPhone(ctx.clinic.id, phone).filter { namesMatch(it.name, name) }.map { it.id }
@@ -325,7 +331,13 @@ class SecretariaToolExecutor(
             "telefone_paciente" to prop("STRING", "Telefone do paciente com DDD"),
         )
 
-        val declarations: JsonArray = buildJsonArray {
+        /** Funções para quem liga sem cadastro (a IA pede nome e telefone). */
+        val declarations: JsonArray get() = declarationsFor(identified = false)
+
+        /** [identified]: paciente do app (CPF) — as funções usam o cadastro dele e não têm nome/telefone. */
+        fun declarationsFor(identified: Boolean): JsonArray = buildJsonArray {
+            val who = if (identified) emptyMap() else identity
+            val identityRequired = if (identified) emptyList() else listOf("nome_paciente", "telefone_paciente")
             add(function("listar_medicos_e_especialidades", "Lista os médicos da clínica e suas especialidades."))
             add(function(
                 "consultar_horarios_disponiveis",
@@ -340,19 +352,21 @@ class SecretariaToolExecutor(
             ))
             add(function(
                 "agendar_consulta",
-                "Marca a consulta. Só chame depois de o paciente escolher um horário e confirmar nome completo e telefone.",
+                if (identified) "Marca a consulta para o paciente que está ligando (já identificado pelo cadastro). Só chame depois de ele escolher e confirmar o horário."
+                else "Marca a consulta. Só chame depois de o paciente escolher um horário e confirmar nome completo e telefone.",
                 mapOf(
                     "medico_id" to prop("INTEGER", "Id do médico (campo medico_id do horário escolhido)"),
                     "inicio" to prop("STRING", "data + \"T\" + horário livre escolhido, de consultar_horarios_disponiveis (AAAA-MM-DDTHH:MM, ex.: 2026-10-06T09:30)"),
                     "motivo" to prop("STRING", "Motivo da consulta, em poucas palavras (opcional)"),
-                ) + identity,
-                required = listOf("medico_id", "inicio", "nome_paciente", "telefone_paciente"),
+                ) + who,
+                required = listOf("medico_id", "inicio") + identityRequired,
             ))
             add(function(
                 "listar_agendamentos_do_paciente",
-                "Lista as consultas futuras de um paciente. Use antes de remarcar ou cancelar.",
-                identity,
-                required = listOf("nome_paciente", "telefone_paciente"),
+                if (identified) "Lista as consultas futuras do paciente que está ligando. Use antes de remarcar ou cancelar."
+                else "Lista as consultas futuras de um paciente. Use antes de remarcar ou cancelar.",
+                who,
+                required = identityRequired,
             ))
             add(function(
                 "remarcar_consulta",
@@ -360,14 +374,14 @@ class SecretariaToolExecutor(
                 mapOf(
                     "agendamento_id" to prop("INTEGER", "Id vindo de listar_agendamentos_do_paciente"),
                     "novo_inicio" to prop("STRING", "data + \"T\" + horário livre de consultar_horarios_disponiveis (AAAA-MM-DDTHH:MM)"),
-                ) + identity,
-                required = listOf("agendamento_id", "novo_inicio", "nome_paciente", "telefone_paciente"),
+                ) + who,
+                required = listOf("agendamento_id", "novo_inicio") + identityRequired,
             ))
             add(function(
                 "cancelar_consulta",
                 "Cancela uma consulta existente, depois de o paciente confirmar qual.",
-                mapOf("agendamento_id" to prop("INTEGER", "Id vindo de listar_agendamentos_do_paciente")) + identity,
-                required = listOf("agendamento_id", "nome_paciente", "telefone_paciente"),
+                mapOf("agendamento_id" to prop("INTEGER", "Id vindo de listar_agendamentos_do_paciente")) + who,
+                required = listOf("agendamento_id") + identityRequired,
             ))
             add(function(
                 "registrar_assunto",

@@ -38,6 +38,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.koin.dsl.module
 import org.koin.ktor.plugin.Koin
 import routes.secretaria.configureSecretaria
+import schemas.secretaria.ServiceResult
 import schemas.secretaria.AppointmentsTable
 import schemas.secretaria.CallsTable
 import schemas.secretaria.ClinicRole
@@ -127,6 +128,96 @@ class SecretariaBridgeTest {
         is Frame.Text -> frame.readText()
         is Frame.Binary -> String(frame.data, Charsets.UTF_8)
         else -> null
+    }
+
+    // ── paciente do app: identificado pelo CPF desde o primeiro segundo ──────
+
+    @Test
+    fun `paciente do app - hello com CPF, a IA sabe quem e e agenda sem pedir nome nem telefone`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val clinic = fx.clinic(boot.clinicId)
+        fx.profiles.save(SecretariaProfileTest.request(photo = SecretariaProfileTest.JPEG_DATA_URL))
+
+        val gemini = fake { g ->
+            with(g) {
+                handshake()
+                say("""{"toolCall":{"functionCalls":[{"id":"t1","name":"consultar_horarios_disponiveis","args":{"especialidade":"Cardiologia","dias":2}}]}}""")
+                val slots = next()["toolResponse"]!!.jsonObject["functionResponses"]!!.jsonArray.first().jsonObject["response"]!!.jsonObject
+                val doctor = slots["medicos"]!!.jsonArray.first().jsonObject
+                val day = doctor["dias"]!!.jsonArray.first().jsonObject
+                val inicio = day["data"]!!.jsonPrimitive.content + "T" + day["horarios_livres"]!!.jsonArray.first().jsonPrimitive.content
+                // sem nome_paciente / telefone_paciente
+                say("""{"toolCall":{"functionCalls":[{"id":"t2","name":"agendar_consulta","args":{"medico_id":${doctor["medico_id"]},"inicio":"$inicio"}}]}}""")
+                next()
+                say("""{"serverContent":{"outputTranscription":{"text":"Pronto, Ana!"}}}""")
+                say("""{"serverContent":{"turnComplete":true}}""")
+                runCatching { while (true) next() }
+            }
+        }
+
+        testApplication {
+            start(fx, config({ gemini.url }))
+            val client = createClient { install(ClientWebSockets) }
+            var callId = -1L
+            client.webSocket("/ws/secretaria/${boot.publicKey}?consent=true") {
+                send(Frame.Text("""{"type":"hello","cpf":"529.982.247-25"}"""))
+                withTimeout(15_000) {
+                    val ready = Json.parseToJsonElement(text(incoming.receive())!!).jsonObject
+                    assertEquals("session_ready", ready["type"]!!.jsonPrimitive.content)
+                    callId = ready["callId"]!!.jsonPrimitive.content.toLong()
+                    // já durante a ligação o painel sabe quem é (ligação em andamento com nome, CPF, convênio e foto)
+                    val active = eventually { runBlocking { fx.calls.activeCall(clinic.id) }?.takeIf { it.patientId != null } }
+                    assertEquals("Ana Souza", active.patientName)
+                    assertEquals("52998224725", active.cpf)
+                    assertEquals("Unimed", active.healthPlan)
+                    assertTrue(active.hasPhoto)
+                    while (true) {
+                        val t = text(incoming.receive()) ?: continue
+                        if (t.contains("Pronto, Ana!")) break
+                    }
+                    send(Frame.Text("""{"type":"end"}"""))
+                }
+            }
+
+            // — o que a IA recebeu: quem é o paciente (sem o CPF) e funções sem nome/telefone
+            val setup = gemini.received.first()["setup"]!!.jsonObject
+            val instruction = setup["systemInstruction"].toString()
+            assertTrue(instruction.contains("PACIENTE NA LINHA"), instruction)
+            assertTrue(instruction.contains("Nome: Ana Souza; telefone: (21) 98765-4321; plano ou convênio: Unimed."))
+            assertFalse(instruction.contains("52998224725"), "o CPF não vai para a IA")
+            assertFalse(setup["tools"].toString().contains("nome_paciente"))
+            assertTrue(gemini.received.any { it.toString().contains("O paciente Ana acabou de iniciar") })
+
+            // — a ligação e a consulta são do paciente do cadastro, e aparecem na aba Agendamentos do app
+            val call = eventually { runBlocking { fx.calls.get(clinic.id, callId) }?.takeIf { it.state == "encerrada" } }
+            assertEquals("Ana Souza", call.patientName)
+            assertEquals("ana@exemplo.test", call.email)
+            assertEquals(1, fx.appointments.forPatient(clinic, call.patientId!!).size)
+            val mine = (fx.profiles.appointments("52998224725") as ServiceResult.Ok).value
+            assertEquals(listOf("Clínica Teste"), mine.upcoming.map { it.clinicName })
+        }
+    }
+
+    @Test
+    fun `hello com CPF sem cadastro (ou sem hello) segue como ligacao comum`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val gemini = fake { g -> with(g) { handshake(); runCatching { while (true) next() } } }
+        testApplication {
+            start(fx, config({ gemini.url }))
+            val client = createClient { install(ClientWebSockets) }
+            client.webSocket("/ws/secretaria/${boot.publicKey}?consent=true") {
+                send(Frame.Text("""{"type":"hello","cpf":"390.533.447-05"}""")) // CPF válido, mas sem cadastro
+                withTimeout(15_000) {
+                    assertEquals("session_ready", Json.parseToJsonElement(text(incoming.receive())!!).jsonObject["type"]!!.jsonPrimitive.content)
+                }
+                send(Frame.Text("""{"type":"end"}"""))
+            }
+            val setup = eventually { gemini.received.firstOrNull()?.get("setup")?.jsonObject }
+            assertFalse(setup["systemInstruction"].toString().contains("PACIENTE NA LINHA"))
+            assertTrue(setup["tools"].toString().contains("nome_paciente"))
+        }
     }
 
     // ── chamada completa: IA consulta horários e agenda ───────────────────────

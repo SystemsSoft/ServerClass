@@ -9,6 +9,7 @@ import schemas.secretaria.CallChannel
 import schemas.secretaria.CallIntent
 import schemas.secretaria.CallOutcome
 import schemas.secretaria.ScheduleWindowDto
+import services.secretaria.CallerInfo
 import services.secretaria.SecretariaCallContext
 import services.secretaria.SecretariaToolExecutor
 import kotlin.test.Test
@@ -259,4 +260,44 @@ class SecretariaToolExecutorTest {
 
     private fun assertNotEquals(unexpected: Any?, actual: Any?, message: String) =
         assertTrue(unexpected != actual, message)
+
+    @Test
+    fun `paciente do app - agenda sem nome e telefone e so ve, remarca ou cancela as consultas dele`() = runBlocking<Unit> {
+        val env = Env()
+        env.fx.profiles.save(SecretariaProfileTest.request())
+        val patientId = env.fx.profiles.linkToClinic(env.clinic.id, env.fx.profiles.find(SecretariaProfileTest.CPF_ANA)!!)
+        val ctx = SecretariaCallContext(env.clinic, env.call.id, env.call.startedAt, CallerInfo(patientId, "Ana Souza", "5521987654321", "Unimed"))
+        fun run(name: String, json: String = "{}") = runBlocking { env.fx.tools.execute(ctx, name, Json.parseToJsonElement(json).jsonObject) }.response
+
+        // agendar sem nome/telefone: é para quem está ligando
+        val booked = run("agendar_consulta", """{"medico_id":${env.cardio.id},"inicio":"2026-10-06T09:00"}""")
+        assertTrue(booked.ok, booked.toString())
+        assertEquals("Ana Souza", booked["paciente"]!!.jsonPrimitive.content)
+        // mesmo que a IA mande outro nome, vale o cadastro
+        val other = run("agendar_consulta", """{"medico_id":${env.cardio.id},"inicio":"2026-10-06T09:30","nome_paciente":"Outra Pessoa","telefone_paciente":"21900000000"}""")
+        assertEquals("Ana Souza", other["paciente"]!!.jsonPrimitive.content)
+
+        // a consulta de outro paciente (marcada por telefone) não aparece nem pode ser cancelada por ela
+        val bruno = env.book(name = "Bruno Lima", phone = "(21) 91111-2222", start = "2026-10-06T10:00").response
+        val list = run("listar_agendamentos_do_paciente")
+        assertEquals(listOf("2026-10-06T09:00", "2026-10-06T09:30"), list["agendamentos"]!!.jsonArray.map { it.jsonObject["inicio"]!!.jsonPrimitive.content })
+        val steal = run("cancelar_consulta", """{"agendamento_id":${bruno["agendamento_id"]}}""")
+        assertFalse(steal.ok)
+        val mine = list["agendamentos"]!!.jsonArray.first().jsonObject["agendamento_id"]
+        assertTrue(run("cancelar_consulta", """{"agendamento_id":$mine}""").ok)
+
+        // a chamada fica com o paciente do cadastro
+        assertEquals(patientId, env.callRow().patientId)
+    }
+
+    @Test
+    fun `funcoes do paciente do app nao tem nome nem telefone`() {
+        val identified = SecretariaToolExecutor.declarationsFor(identified = true).toString()
+        val anonymous = SecretariaToolExecutor.declarationsFor(identified = false).toString()
+        assertFalse(identified.contains("nome_paciente"))
+        assertFalse(identified.contains("telefone_paciente"))
+        assertTrue(identified.contains("paciente que está ligando"))
+        assertTrue(anonymous.contains("nome_paciente"))
+        assertEquals(SecretariaToolExecutor.declarations.toString(), anonymous)
+    }
 }

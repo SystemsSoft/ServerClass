@@ -131,15 +131,20 @@ class SecretariaCallService(
             .limit(1)
             .singleOrNull()
             ?.let {
-                val patientPhone = it[CallsTable.patientId]?.let { pid ->
-                    PatientsTable.selectAll().where { PatientsTable.id eq pid }.singleOrNull()?.get(PatientsTable.phone)
-                }
+                val patient = it[CallsTable.patientId]?.let { pid -> PatientsTable.selectAll().where { PatientsTable.id eq pid }.singleOrNull() }
+                val profileId = patient?.get(PatientsTable.profileId)
                 ActiveCallDto(
                     id = it[CallsTable.id],
-                    phone = patientPhone ?: it[CallsTable.callerPhone],
+                    phone = patient?.get(PatientsTable.phone) ?: it[CallsTable.callerPhone],
                     description = it[CallsTable.summary] ?: it[CallsTable.subject] ?: "Atendimento em andamento",
                     startedAt = it[CallsTable.startedAt],
                     elapsedSeconds = (clock() - it[CallsTable.startedAt]) / 1000,
+                    patientId = it[CallsTable.patientId],
+                    patientName = patient?.get(PatientsTable.name) ?: it[CallsTable.callerName],
+                    cpf = patient?.get(PatientsTable.cpf),
+                    email = patient?.get(PatientsTable.email),
+                    healthPlan = patient?.get(PatientsTable.healthPlan),
+                    hasPhoto = profileId != null && profileId in profilesWithPhoto(listOf(profileId)),
                 )
             }
     }
@@ -221,6 +226,7 @@ class SecretariaCallService(
         val ids = rows.map { it[CallsTable.id] }
         val withTranscript = CallMessagesTable.select(CallMessagesTable.callId).where { CallMessagesTable.callId inList ids }
             .withDistinct().map { it[CallMessagesTable.callId] }.toSet()
+        val withPhoto = profilesWithPhoto(rows.mapNotNull { it.getOrNull(PatientsTable.profileId) })
         return rows.map { row ->
             CallDto(
                 id = row[CallsTable.id],
@@ -233,6 +239,11 @@ class SecretariaCallService(
                 state = row[CallsTable.state].name.lowercase(),
                 hasRecording = row[CallsTable.recordingUrl] != null,
                 hasTranscript = row[CallsTable.id] in withTranscript,
+                patientId = row[CallsTable.patientId],
+                cpf = row.getOrNull(PatientsTable.cpf),
+                email = row.getOrNull(PatientsTable.email),
+                healthPlan = row.getOrNull(PatientsTable.healthPlan),
+                hasPhoto = row.getOrNull(PatientsTable.profileId)?.let { it in withPhoto } ?: false,
             )
         }
     }

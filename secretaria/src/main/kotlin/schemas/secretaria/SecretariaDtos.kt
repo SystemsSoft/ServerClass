@@ -75,7 +75,17 @@ data class CreateAppointmentRequest(
 )
 
 @Serializable
-data class PatientDto(val id: Long, val name: String, val phone: String?, val email: String?, val createdAt: Long)
+data class PatientDto(
+    val id: Long,
+    val name: String,
+    val phone: String?,
+    val email: String?,
+    val createdAt: Long,
+    /** Do cadastro feito no app (nulos para quem não usou o app). */
+    @EncodeDefault val cpf: String? = null,
+    @EncodeDefault val healthPlan: String? = null,
+    @EncodeDefault val hasPhoto: Boolean = false,
+)
 
 @Serializable
 data class CallDto(
@@ -90,13 +100,31 @@ data class CallDto(
     val state: String,
     val hasRecording: Boolean,
     val hasTranscript: Boolean,
+    /** Paciente da ligação (cadastro do app); a foto vem de GET /patients/{patientId}/photo. */
+    @EncodeDefault val patientId: Long? = null,
+    @EncodeDefault val cpf: String? = null,
+    @EncodeDefault val email: String? = null,
+    @EncodeDefault val healthPlan: String? = null,
+    @EncodeDefault val hasPhoto: Boolean = false,
 )
 
 @Serializable
 data class TranscriptMessageDto(val speaker: String, val content: String, val offsetMs: Long)
 
 @Serializable
-data class ActiveCallDto(val id: Long, val phone: String?, val description: String, val startedAt: Long, val elapsedSeconds: Long)
+data class ActiveCallDto(
+    val id: Long,
+    val phone: String?,
+    val description: String,
+    val startedAt: Long,
+    val elapsedSeconds: Long,
+    @EncodeDefault val patientId: Long? = null,
+    @EncodeDefault val patientName: String? = null,
+    @EncodeDefault val cpf: String? = null,
+    @EncodeDefault val email: String? = null,
+    @EncodeDefault val healthPlan: String? = null,
+    @EncodeDefault val hasPhoto: Boolean = false,
+)
 
 @Serializable
 data class StatDto(val today: Long, val yesterday: Long, val changePercent: Int, val trendUp: Boolean)
@@ -348,3 +376,51 @@ data class ReportDto(
     val callsByHour: List<Int>,
     val perDay: List<DayCountDto>,
 )
+
+// ── app do paciente (PWA): cadastro por CPF e consultas ─────────────────────
+
+/** Cadastro feito no app. [photo]: data URL ou base64 (null = mantém a atual); [removePhoto] apaga a atual. */
+@Serializable
+data class SaveProfileRequest(
+    val cpf: String,
+    val name: String,
+    val phone: String,
+    val email: String,
+    val healthPlan: String,
+    val photo: String? = null,
+    val removePhoto: Boolean = false,
+)
+
+@Serializable
+data class ProfileDto(
+    val cpf: String,
+    val name: String,
+    val phone: String,
+    val email: String,
+    val healthPlan: String,
+    @EncodeDefault val hasPhoto: Boolean = false,
+)
+
+/** O CPF vai no corpo (POST), nunca na URL: assim não fica nos logs de acesso. */
+@Serializable
+data class CpfRequest(val cpf: String)
+
+@Serializable
+data class PatientAppointmentDto(
+    val clinicName: String,
+    val doctorName: String,
+    val specialty: String,
+    /** Horário local da clínica, ex.: "2026-10-06T09:00". */
+    val startLocal: String,
+    /** "terça-feira, 06/10 às 09:00". */
+    val label: String,
+    /** agendado | confirmado | concluido | faltou | cancelado */
+    val status: String,
+)
+
+@Serializable
+data class PatientAppointmentsDto(val name: String, val upcoming: List<PatientAppointmentDto>, val history: List<PatientAppointmentDto>)
+
+/** Foto do paciente para o painel, como data URL ("data:image/jpeg;base64,..."). */
+@Serializable
+data class PhotoDto(val photo: String)

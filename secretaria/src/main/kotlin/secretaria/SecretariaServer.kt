@@ -33,6 +33,7 @@ import schemas.secretaria.SecretariaClinicService
 import schemas.secretaria.SecretariaDashboardService
 import schemas.secretaria.SecretariaPatientService
 import schemas.secretaria.SecretariaPlanService
+import schemas.secretaria.SecretariaProfileService
 import schemas.secretaria.SecretariaReportService
 import schemas.secretaria.SecretariaSchema
 import schemas.secretaria.SecretariaSettingsService
@@ -121,13 +122,14 @@ fun secretariaModule(database: Database): Module = module {
     single { SecretariaPatientService(database, get()) }
     single { SecretariaPlanService(database, get()) }
     single { SecretariaReportService(database) }
+    single { SecretariaProfileService(database) }
     single { SecretariaDashboardService(get(), get(), get(), get()) }
     single { SecretariaCallRegistry() }
     single { SecretariaToolExecutor(get(), get(), get()) }
     single { SecretariaLiveBridge(get(), get()) }
     single {
         SecretariaCallHandler(
-            calls = get(), clinics = get(), settings = get(), bridge = get(), registry = get(),
+            calls = get(), clinics = get(), settings = get(), bridge = get(), registry = get(), profiles = get(),
             model = SecretariaLiveConfig().model,
             maxConcurrentCalls = config("secretaria.maxConcurrentCalls", "SECRETARIA_MAX_CONCURRENT_CALLS")?.toIntOrNull() ?: 5,
         )

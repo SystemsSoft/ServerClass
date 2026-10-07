@@ -20,11 +20,13 @@ class SecretariaPatientService(
         val digits = q.filter { it.isDigit() }
         val where: Op<Boolean> = if (q.isEmpty()) PatientsTable.clinicId eq clinicId
         else (PatientsTable.clinicId eq clinicId) and (
-            (PatientsTable.name.lowerCase() like "%${q.lowercase()}%") or (if (digits.length >= 3) PatientsTable.phone like "%$digits%" else Op.FALSE)
+            (PatientsTable.name.lowerCase() like "%${q.lowercase()}%") or
+                (if (digits.length >= 3) (PatientsTable.phone like "%$digits%") or (PatientsTable.cpf like "%$digits%") else Op.FALSE)
             )
         val total = PatientsTable.selectAll().where(where).count()
-        val items = PatientsTable.selectAll().where(where).orderBy(PatientsTable.name).limit(limit).offset(offset).map { it.toDto() }
-        PatientPageDto(items, total)
+        val rows = PatientsTable.selectAll().where(where).orderBy(PatientsTable.name).limit(limit).offset(offset).toList()
+        val withPhoto = profilesWithPhoto(rows.mapNotNull { it[PatientsTable.profileId] })
+        PatientPageDto(rows.map { it.toDto(withPhoto) }, total)
     }
 
     suspend fun detail(clinic: ClinicInfo, patientId: Long): ServiceResult<PatientDetailDto> {
@@ -105,6 +107,9 @@ class SecretariaPatientService(
             it[phone] = null
             it[email] = null
             it[consentAt] = null
+            it[cpf] = null
+            it[healthPlan] = null
+            it[profileId] = null // desliga do cadastro do app (que é do paciente, não da clínica)
         }
         ServiceResult.Ok(Unit)
     }
@@ -121,7 +126,13 @@ class SecretariaPatientService(
     }
 
     private fun Transaction.find(clinicId: Long, id: Long): PatientDto? =
-        PatientsTable.selectAll().where { (PatientsTable.id eq id) and (PatientsTable.clinicId eq clinicId) }.singleOrNull()?.toDto()
+        PatientsTable.selectAll().where { (PatientsTable.id eq id) and (PatientsTable.clinicId eq clinicId) }.singleOrNull()
+            ?.let { row -> row.toDto(profilesWithPhoto(listOfNotNull(row[PatientsTable.profileId]))) }
 
-    private fun ResultRow.toDto() = PatientDto(this[PatientsTable.id], this[PatientsTable.name], this[PatientsTable.phone], this[PatientsTable.email], this[PatientsTable.createdAt])
+    private fun ResultRow.toDto(withPhoto: Set<Long>) = PatientDto(
+        this[PatientsTable.id], this[PatientsTable.name], this[PatientsTable.phone], this[PatientsTable.email], this[PatientsTable.createdAt],
+        cpf = this[PatientsTable.cpf],
+        healthPlan = this[PatientsTable.healthPlan],
+        hasPhoto = this[PatientsTable.profileId]?.let { it in withPhoto } ?: false,
+    )
 }

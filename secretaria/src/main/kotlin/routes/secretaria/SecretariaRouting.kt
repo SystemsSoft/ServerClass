@@ -8,6 +8,7 @@ import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.webSocket
@@ -27,6 +28,9 @@ import schemas.secretaria.SecretariaClinicService
 import schemas.secretaria.SecretariaDashboardService
 import schemas.secretaria.SecretariaPatientService
 import schemas.secretaria.SecretariaPlanService
+import schemas.secretaria.SecretariaProfileService
+import schemas.secretaria.SaveProfileRequest
+import schemas.secretaria.CpfRequest
 import schemas.secretaria.SecretariaReportService
 import schemas.secretaria.SecretariaSettingsService
 import schemas.secretaria.SecretariaTeamService
@@ -54,6 +58,7 @@ internal class SecretariaApi(
     val patients: SecretariaPatientService,
     val plans: SecretariaPlanService,
     val reports: SecretariaReportService,
+    val profiles: SecretariaProfileService,
 ) {
     val throttle = LoginThrottle()
 }
@@ -63,7 +68,7 @@ fun Application.configureSecretaria() {
     // Resolvidos já na partida (não na primeira requisição): se o banco da SecretárIA não abrir, o erro aparece
     // aqui — e o Application.kt desliga só este módulo, sem derrubar os demais produtos do servidor.
     val api = SecretariaApi(
-        get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+        get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
     )
     val allowedOrigins = config("secretaria.allowedOrigins", "SECRETARIA_ALLOWED_ORIGINS")
         ?.split(',')?.map { it.trim().trimEnd('/') }?.filter { it.isNotEmpty() }.orEmpty()
@@ -83,6 +88,21 @@ private fun io.ktor.server.routing.Route.publicRoutes(api: SecretariaApi, allowe
     /** Tela "escolha a clínica" do PWA: clínicas ativas, cada uma com a chave que abre a chamada. */
     get("/secretaria/public/clinics") {
         call.respond(api.settings.publicDirectory())
+    }
+
+    /**
+     * Cadastro do paciente no app (cria ou atualiza pelo CPF). Só o CPF identifica o paciente (sem senha): decisão do
+     * produto, com o risco descrito no SECRETARIA.md. O CPF vai no corpo, nunca na URL (não fica em log de acesso).
+     */
+    post("/secretaria/public/patients") {
+        val body = call.receiveOrNull<SaveProfileRequest>() ?: return@post call.badJson()
+        call.respondResult(api.profiles.save(body))
+    }
+
+    /** Consultas do paciente (todas as clínicas) para a aba "Agendamentos" do app. */
+    post("/secretaria/public/patients/appointments") {
+        val body = call.receiveOrNull<CpfRequest>() ?: return@post call.badJson()
+        call.respondResult(api.profiles.appointments(body.cpf))
     }
 
     get("/secretaria/public/{publicKey}") {

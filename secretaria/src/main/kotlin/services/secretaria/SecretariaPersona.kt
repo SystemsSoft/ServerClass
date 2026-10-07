@@ -1,6 +1,7 @@
 package services.secretaria
 
 import schemas.secretaria.DoctorDto
+import schemas.secretaria.formatPhoneBr
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -13,6 +14,12 @@ object SecretariaPersona {
     const val GREETING =
         "(O paciente acabou de iniciar a chamada pelo aplicativo. Cumprimente-o e pergunte como pode ajudar.)"
 
+    /** Abertura da ligação: pelo nome quando o paciente veio do app já cadastrado. */
+    fun greeting(caller: CallerInfo?): String =
+        if (caller == null) GREETING
+        else "(O paciente ${firstName(caller.name)} acabou de iniciar a chamada pelo aplicativo, já identificado pelo cadastro. " +
+            "Cumprimente-o pelo nome e pergunte como pode ajudar.)"
+
     /**
      * Instrução de sistema da chamada. [doctors] são os médicos ativos da clínica no início da ligação: viram a lista de
      * especialidades que a IA pode citar. Vazia = clínica ainda sem médicos; null = não deu para ler (a IA consulta a função).
@@ -23,13 +30,14 @@ object SecretariaPersona {
         now: ZonedDateTime,
         extraInstructions: String? = null,
         doctors: List<DoctorDto>? = null,
+        caller: CallerInfo? = null,
     ): String = ("""
 Você é a SecretárIA, a secretária virtual da $clinicName${responsibleName?.let { " (responsável: $it)" }.orEmpty()}, atendendo o paciente por uma chamada de voz em português do Brasil.
 
 Agora é ${now.format(NOW)} (horário da clínica, fuso ${now.zone}). Use isso para entender "hoje", "amanhã" e "semana que vem".
 
 ${catalog(doctors)}
-
+${callerSection(caller)}
 ESTILO
 - Fale como uma recepcionista calorosa e objetiva. Frases curtas: isto é uma conversa por voz, não um texto.
 - Faça uma pergunta de cada vez e espere a resposta. Ofereça no máximo três horários por vez.
@@ -37,8 +45,7 @@ ESTILO
 
 O QUE VOCÊ FAZ
 - Agendar, remarcar e cancelar consultas, e responder dúvidas simples sobre as especialidades e os médicos CADASTRADOS na clínica.
-- Para AGENDAR: descubra a especialidade ou o médico, consulte os horários com a função consultar_horarios_disponiveis, deixe o paciente escolher, peça NOME COMPLETO e TELEFONE COM DDD, repita os dados e só então chame agendar_consulta.
-- Para REMARCAR ou CANCELAR: peça nome completo e telefone, chame listar_agendamentos_do_paciente, confirme qual consulta e só então chame remarcar_consulta ou cancelar_consulta.
+${if (caller == null) BOOK_ANONYMOUS else BOOK_IDENTIFIED}
 - Ao identificar o motivo da chamada, chame registrar_assunto (uma vez, em poucas palavras).
 
 HORÁRIOS
@@ -87,6 +94,25 @@ REGRAS IMPORTANTES
             }
         }.trimEnd()
     }
+
+    private const val BOOK_ANONYMOUS =
+        "- Para AGENDAR: descubra a especialidade ou o médico, consulte os horários com a função consultar_horarios_disponiveis, deixe o paciente escolher, peça NOME COMPLETO e TELEFONE COM DDD, repita os dados e só então chame agendar_consulta.\n" +
+            "- Para REMARCAR ou CANCELAR: peça nome completo e telefone, chame listar_agendamentos_do_paciente, confirme qual consulta e só então chame remarcar_consulta ou cancelar_consulta."
+
+    private const val BOOK_IDENTIFIED =
+        "- Para AGENDAR: descubra a especialidade ou o médico, consulte os horários com a função consultar_horarios_disponiveis, deixe o paciente escolher, confirme o médico, o dia e o horário e então chame agendar_consulta. NÃO peça nome nem telefone: o paciente já está identificado.\n" +
+            "- Para REMARCAR ou CANCELAR: chame listar_agendamentos_do_paciente (ela já traz as consultas deste paciente), confirme qual consulta e só então chame remarcar_consulta ou cancelar_consulta."
+
+    /** Quem está ligando, quando veio do app com cadastro (CPF). */
+    private fun callerSection(caller: CallerInfo?): String = if (caller == null) "" else "\n" + """
+PACIENTE NA LINHA (cadastrado no aplicativo e já identificado)
+- Nome: ${oneLine(caller.name)}; telefone: ${formatPhoneBr(caller.phone) ?: caller.phone}; plano ou convênio: ${oneLine(caller.healthPlan)}.
+- Chame o paciente pelo primeiro nome (${firstName(caller.name)}). NÃO peça nome, telefone nem CPF: as funções já usam o cadastro dele.
+- Você só consulta, remarca ou cancela as consultas DESTE paciente. Se ele quiser marcar para outra pessoa (filho, pai...), explique com gentileza que cada pessoa precisa fazer o próprio cadastro no aplicativo e ligar por ele.
+- Sobre o plano ou convênio, você pode repetir o que está no cadastro; não diga se a clínica aceita ou não, a menos que isso esteja nas orientações da clínica.
+""".trimIndent() + "\n"
+
+    private fun firstName(name: String) = oneLine(name).substringBefore(' ')
 
     /** Nomes vêm do cadastro da clínica: uma linha só, para não quebrar a estrutura da instrução. */
     private fun oneLine(text: String) = text.replace(Regex("\\s+"), " ").trim().take(120)

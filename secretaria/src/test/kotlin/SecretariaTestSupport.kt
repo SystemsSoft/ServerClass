@@ -12,6 +12,7 @@ import schemas.secretaria.SecretariaClinicService
 import schemas.secretaria.SecretariaDashboardService
 import schemas.secretaria.SecretariaPatientService
 import schemas.secretaria.SecretariaPlanService
+import schemas.secretaria.SecretariaProfileService
 import schemas.secretaria.SecretariaReportService
 import schemas.secretaria.SecretariaSchema
 import schemas.secretaria.SecretariaSettingsService
@@ -58,6 +59,7 @@ class SecretariaFixture(
     val patients = SecretariaPatientService(db, appointments, clock)
     val plans = SecretariaPlanService(db, clinics, clock)
     val reports = SecretariaReportService(db)
+    val profiles = SecretariaProfileService(db, clock)
     val dashboard = SecretariaDashboardService(clinics, calls, appointments, settings, clock)
     val registry = SecretariaCallRegistry()
     val tools = SecretariaToolExecutor(clinics, appointments, calls, clock)
@@ -89,7 +91,10 @@ fun secretariaTestConfig(
 /** Sobe o módulo (rotas + Koin) sobre os serviços do [SecretariaFixture]. */
 fun ApplicationTestBuilder.startSecretaria(fx: SecretariaFixture, config: SecretariaLiveConfig = secretariaTestConfig({ "ws://x" })) {
     val bridge = SecretariaLiveBridge(fx.tools, fx.calls, config)
-    val handler = SecretariaCallHandler(fx.calls, fx.clinics, fx.settings, bridge, fx.registry, "models/fake", maxConcurrentCalls = 2, clock = fx.clock)
+    val handler = SecretariaCallHandler(
+        fx.calls, fx.clinics, fx.settings, bridge, fx.registry, fx.profiles, "models/fake", maxConcurrentCalls = 2, clock = fx.clock,
+        helloTimeoutMillis = 100, // quem não manda hello (testes antigos) não espera 1,5 s
+    )
     application {
         install(ServerWebSockets)
         install(ContentNegotiation) { json() }
@@ -97,7 +102,7 @@ fun ApplicationTestBuilder.startSecretaria(fx: SecretariaFixture, config: Secret
             modules(module {
                 single { fx.auth }; single { fx.clinics }; single { fx.calls }; single { fx.appointments }; single { fx.dashboard }
                 single { fx.registry }; single { handler }; single { fx.settings }; single { fx.team }; single { fx.catalog }
-                single { fx.patients }; single { fx.plans }; single { fx.reports }
+                single { fx.patients }; single { fx.plans }; single { fx.reports }; single { fx.profiles }
             })
         }
         configureSecretaria()
