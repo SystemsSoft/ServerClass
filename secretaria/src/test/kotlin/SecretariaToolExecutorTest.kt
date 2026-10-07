@@ -61,6 +61,12 @@ class SecretariaToolExecutorTest {
         assertNull(none["horarios"])
         assertEquals(listOf("Cardiologia", "Consulta geral"), none["especialidades_da_clinica"]!!.jsonArray.map { it.jsonPrimitive.content })
 
+        // variações do nome acham a especialidade cadastrada; especialidade diferente com começo parecido, não
+        val viaVariant = env.run("consultar_horarios_disponiveis", """{"especialidade":"cardiologista","dias":1}""").response
+        assertTrue(viaVariant.ok, viaVariant.toString())
+        assertEquals(env.cardio.id, viaVariant["horarios"]!!.jsonArray.first().jsonObject["medico_id"]!!.jsonPrimitive.content.toLong())
+        assertFalse(env.run("consultar_horarios_disponiveis", """{"especialidade":"neurologista"}""").response.ok)
+
         // a busca por parte do nome continua valendo (mesma regra de antes) e sem especialidade busca em todos
         assertTrue(env.run("consultar_horarios_disponiveis", """{"especialidade":"Consulta"}""").response.ok)
         assertTrue(env.run("consultar_horarios_disponiveis", """{"dias":1}""").response.ok)

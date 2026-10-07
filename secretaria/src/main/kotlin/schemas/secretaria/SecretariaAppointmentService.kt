@@ -85,7 +85,7 @@ class SecretariaAppointmentService(
         val doctors = (DoctorsTable innerJoin SpecialtiesTable).selectAll()
             .where { (DoctorsTable.clinicId eq clinic.id) and (DoctorsTable.active eq true) }
             .filter { doctorId == null || it[DoctorsTable.id] == doctorId }
-            .filter { specialty.isNullOrBlank() || it[SpecialtiesTable.name].contains(specialty.trim(), ignoreCase = true) }
+            .filter { specialty.isNullOrBlank() || specialtyMatches(it[SpecialtiesTable.name], specialty) }
         if (doctors.isEmpty()) return@dbQuery emptyList()
 
         val ids = doctors.map { it[DoctorsTable.id] }

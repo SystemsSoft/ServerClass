@@ -57,3 +57,34 @@ fun namesMatch(a: String, b: String): Boolean {
     val (short, long) = if (ta.size <= tb.size) ta to tb else tb to ta
     return long.containsAll(short)
 }
+
+/**
+ * A especialidade cadastrada [registered] corresponde ao que foi pedido em [query]? Ignora acentos e maiúsculas, aceita
+ * parte do nome ("cardio") e as variações do mesmo radical ("cardiologista"/"cardiólogo" ~ Cardiologia, "pediatra" ~
+ * Pediatria, "nutricionista" ~ Nutrição, "clínico geral" ~ Clínica geral). Palavras como "médico", "consulta" e
+ * "especialista" no pedido são ignoradas. Não é semântico: "médico do coração" → Cardiologia fica a cargo da IA.
+ */
+fun specialtyMatches(registered: String, query: String): Boolean {
+    val r = foldText(registered)
+    val q = foldText(query)
+    if (q.isEmpty() || r.contains(q)) return true
+    val asked = q.split(' ').filter { it.length >= 4 && it !in SPECIALTY_FILLER }
+    if (asked.isEmpty()) return false
+    val words = r.split(' ')
+    return asked.all { a -> words.any { sameRoot(it, a) } }
+}
+
+/** Mesmo radical: prefixo comum de pelo menos 5 letras e que só difere nas últimas 4 do mais curto. */
+private fun sameRoot(a: String, b: String): Boolean {
+    val common = a.zip(b).takeWhile { (x, y) -> x == y }.size
+    return common >= maxOf(5, minOf(a.length, b.length) - 4)
+}
+
+private fun foldText(text: String): String = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "").lowercase()
+    .replace(Regex("[^a-z0-9]+"), " ").trim()
+
+private val SPECIALTY_FILLER = setOf(
+    "medico", "medica", "medicos", "medicas", "doutor", "doutora", "especialista", "especialistas",
+    "especialidade", "consulta", "consultas", "marcar", "agendar", "quero", "preciso",
+)

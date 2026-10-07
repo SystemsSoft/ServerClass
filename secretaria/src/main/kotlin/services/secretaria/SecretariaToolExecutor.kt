@@ -28,6 +28,7 @@ import schemas.secretaria.SecretariaClinicService
 import schemas.secretaria.namesMatch
 import schemas.secretaria.normalizePhone
 import schemas.secretaria.parseLocalIso
+import schemas.secretaria.specialtyMatches
 import java.time.Instant
 import java.time.LocalDate
 
@@ -97,7 +98,7 @@ class SecretariaToolExecutor(
         val doctors = clinics.doctors(ctx.clinic.id)
         if (doctors.isEmpty()) return Result(fail(NO_DOCTORS))
         val specialty = args.str("especialidade")?.trim()
-        if (specialty != null && doctors.none { it.specialty.contains(specialty, ignoreCase = true) }) { // mesma regra de availableSlots
+        if (specialty != null && doctors.none { specialtyMatches(it.specialty, specialty) }) { // mesma regra de availableSlots
             return Result(buildJsonObject {
                 put("ok", false)
                 put(
