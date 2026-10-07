@@ -55,4 +55,6 @@ tasks.shadowJar {
     }
     // nome que NÃO contém "server-0.0.1.jar": o deploy do servidor principal mata processos por esse nome
     archiveFileName.set("secretaria-0.0.1.jar")
+    // junta os META-INF/services de todas as bibliotecas: sem isso só um driver JDBC (H2 ou MySQL) fica registrado no jar
+    mergeServiceFiles()
 }

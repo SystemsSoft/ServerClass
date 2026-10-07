@@ -153,7 +153,9 @@ private fun connectMySql(): Database {
     val user = required("db.user", "DB_USER")
     val password = required("db.password", "DB_PASSWORD")
 
-    // mesmo comportamento do servidor principal: cria o banco se ainda não existir
+    // mesmo comportamento do servidor principal: cria o banco se ainda não existir.
+    // Carrega o driver explicitamente (como o servidor principal): não depende do registro automático do jar.
+    Class.forName("com.mysql.cj.jdbc.Driver")
     DriverManager.getConnection("jdbc:mysql://$host:3306/", user, password).use { connection ->
         connection.createStatement().use {
             it.executeUpdate("CREATE DATABASE IF NOT EXISTS `$DB_NAME` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
