@@ -25,6 +25,7 @@ import schemas.secretaria.NotificationType
 import schemas.secretaria.SecretariaAppointmentService
 import schemas.secretaria.SecretariaCallService
 import schemas.secretaria.SecretariaClinicService
+import schemas.secretaria.SecretariaSlots
 import schemas.secretaria.namesMatch
 import schemas.secretaria.normalizePhone
 import schemas.secretaria.parseLocalIso
@@ -110,21 +111,41 @@ class SecretariaToolExecutor(
             })
         }
 
-        val slots = appointments.availableSlots(ctx.clinic, args.long("medico_id"), specialty, from, days, limit = 8)
+        // Por médico e por dia, com a duração da consulta e o atendimento de cada um: a IA só fala horários que
+        // existem na grade do médico (ex.: de 30 em 30 min) e sabe que há outros dias além dos listados.
+        val availability = appointments.availability(ctx.clinic, args.long("medico_id"), specialty, from, days)
+        val anyFree = availability.any { it.freeSlots.isNotEmpty() }
         return Result(buildJsonObject {
             put("ok", true)
-            putJsonArray("horarios") {
-                slots.forEach { s ->
+            putJsonArray("medicos") {
+                availability.forEach { a ->
+                    val byDay = a.freeSlots.groupBy { it.toLocalDate() }.toSortedMap()
                     add(buildJsonObject {
-                        put("medico_id", s.doctorId)
-                        put("medico", s.doctorName)
-                        put("especialidade", s.specialty)
-                        put("inicio", s.startLocal)
-                        put("descricao", s.label)
+                        put("medico_id", a.doctorId)
+                        put("medico", a.doctorName)
+                        put("especialidade", a.specialty)
+                        SecretariaSlots.slotMinutesOf(a.windows)?.let { put("duracao_consulta_min", it) }
+                        put("atendimento", SecretariaSlots.describe(a.windows))
+                        putJsonArray("dias") {
+                            byDay.entries.take(MAX_DAYS).forEach { (date, times) ->
+                                add(buildJsonObject {
+                                    put("data", date.toString())
+                                    put("dia", SecretariaSlots.dayLabel(date))
+                                    putJsonArray("horarios_livres") { times.take(MAX_TIMES_PER_DAY).forEach { add(JsonPrimitive(it.toLocalTime().toString())) } }
+                                })
+                            }
+                        }
+                        if (byDay.size > MAX_DAYS) put("ha_mais_dias", true)
                     })
                 }
             }
-            if (slots.isEmpty()) put("mensagem", "Não há horários livres nesse período para o que foi pedido. Ofereça outra data ou especialidade.")
+            put(
+                "como_usar",
+                "Só existem os horários de horarios_livres: eles já seguem a duração da consulta e o atendimento de cada médico. " +
+                    "Para agendar, use o medico_id e inicio = data + \"T\" + horário (ex.: ${from}T09:30). " +
+                    "Para outros dias, chame de novo com a_partir_de.",
+            )
+            if (!anyFree) put("mensagem", "Não há horários livres nesse período para o que foi pedido. Ofereça buscar outra data (a_partir_de) ou outro médico da mesma especialidade.")
         })
     }
 
@@ -132,7 +153,7 @@ class SecretariaToolExecutor(
 
     private suspend fun book(ctx: SecretariaCallContext, args: JsonObject): Result {
         val doctorId = args.long("medico_id") ?: return Result(fail("Falta o medico_id (use consultar_horarios_disponiveis)."))
-        val start = parseLocalIso(args.str("inicio")) ?: return Result(fail("O 'inicio' deve estar no formato AAAA-MM-DDTHH:MM, igual ao devolvido por consultar_horarios_disponiveis."))
+        val start = parseLocalIso(args.str("inicio")) ?: return Result(fail("O 'inicio' deve ser AAAA-MM-DDTHH:MM: a data + \"T\" + um horário livre devolvido por consultar_horarios_disponiveis."))
         val name = args.str("nome_paciente")?.trim()?.takeIf { it.split(' ').size >= 2 && it.length >= 5 }
             ?: return Result(fail("Preciso do nome completo do paciente (nome e sobrenome)."))
         val phone = normalizePhone(args.str("telefone_paciente"))
@@ -140,7 +161,7 @@ class SecretariaToolExecutor(
 
         val patientId = clinics.findOrCreatePatient(ctx.clinic.id, name, phone)
         return when (val result = appointments.book(ctx.clinic, doctorId, patientId, start, AppointmentCreator.IA, ctx.callId, args.str("motivo"))) {
-            is BookResult.Fail -> Result(fail(result.reason))
+            is BookResult.Fail -> Result(fail(withAgendaHint(result.reason)))
             is BookResult.Ok -> {
                 val a = result.appointment
                 calls.attachPatient(ctx.callId, patientId, name, phone)
@@ -193,7 +214,7 @@ class SecretariaToolExecutor(
         val owner = appointments.upcomingForPatients(ctx.clinic, ids).firstOrNull { it.id == id }
             ?: return Result(fail("Não encontrei esse agendamento para o paciente informado."))
         return when (val result = appointments.reschedule(ctx.clinic, id, start, owner.patientId, AppointmentCreator.IA, ctx.callId)) {
-            is BookResult.Fail -> Result(fail(result.reason))
+            is BookResult.Fail -> Result(fail(withAgendaHint(result.reason)))
             is BookResult.Ok -> {
                 val a = result.appointment
                 calls.attachPatient(ctx.callId, a.patientId, a.patientName, a.patientPhone.orEmpty())
@@ -259,6 +280,10 @@ class SecretariaToolExecutor(
 
     private fun fail(message: String): JsonObject = buildJsonObject { put("ok", false); put("erro", message) }
 
+    /** Horário fora da grade do médico: lembra a IA de usar só os horários livres (que seguem o intervalo de consulta). */
+    private fun withAgendaHint(reason: String): String =
+        if (reason.contains("agenda do médico")) "$reason Consulte de novo consultar_horarios_disponiveis e ofereça só os horários livres de lá (eles seguem o intervalo de consulta do médico)." else reason
+
     private fun specialtiesOf(doctors: List<schemas.secretaria.DoctorDto>): List<String> =
         doctors.map { it.specialty }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
 
@@ -271,6 +296,10 @@ class SecretariaToolExecutor(
     // ── declarações enviadas ao Gemini ───────────────────────────────────────
 
     companion object {
+        /** Dias com horário livre listados por médico, e horários por dia (15 em 15 min por 8 h = 32). */
+        private const val MAX_DAYS = 5
+        private const val MAX_TIMES_PER_DAY = 32
+
         private const val NO_DOCTORS =
             "A clínica ainda não tem médicos cadastrados. Não ofereça nem agende consultas; registre o assunto e diga que a equipe da clínica retornará o contato."
 
@@ -300,7 +329,8 @@ class SecretariaToolExecutor(
             add(function("listar_medicos_e_especialidades", "Lista os médicos da clínica e suas especialidades."))
             add(function(
                 "consultar_horarios_disponiveis",
-                "Consulta os próximos horários livres. Sempre use antes de oferecer horários ao paciente.",
+                "Consulta os horários livres, por médico e por dia, já no intervalo de consulta de cada médico (duracao_consulta_min) e com o atendimento dele. " +
+                    "Sempre use antes de oferecer horários ao paciente: só existem os horários devolvidos aqui.",
                 mapOf(
                     "especialidade" to prop("STRING", "Especialidade desejada, ex.: Cardiologia (opcional)"),
                     "medico_id" to prop("INTEGER", "Id do médico, vindo de listar_medicos_e_especialidades (opcional)"),
@@ -313,7 +343,7 @@ class SecretariaToolExecutor(
                 "Marca a consulta. Só chame depois de o paciente escolher um horário e confirmar nome completo e telefone.",
                 mapOf(
                     "medico_id" to prop("INTEGER", "Id do médico (campo medico_id do horário escolhido)"),
-                    "inicio" to prop("STRING", "Início exato do horário escolhido, igual ao campo 'inicio' devolvido (AAAA-MM-DDTHH:MM)"),
+                    "inicio" to prop("STRING", "data + \"T\" + horário livre escolhido, de consultar_horarios_disponiveis (AAAA-MM-DDTHH:MM, ex.: 2026-10-06T09:30)"),
                     "motivo" to prop("STRING", "Motivo da consulta, em poucas palavras (opcional)"),
                 ) + identity,
                 required = listOf("medico_id", "inicio", "nome_paciente", "telefone_paciente"),
@@ -329,7 +359,7 @@ class SecretariaToolExecutor(
                 "Move uma consulta existente para outro horário livre.",
                 mapOf(
                     "agendamento_id" to prop("INTEGER", "Id vindo de listar_agendamentos_do_paciente"),
-                    "novo_inicio" to prop("STRING", "Novo horário, igual ao campo 'inicio' de um horário livre (AAAA-MM-DDTHH:MM)"),
+                    "novo_inicio" to prop("STRING", "data + \"T\" + horário livre de consultar_horarios_disponiveis (AAAA-MM-DDTHH:MM)"),
                 ) + identity,
                 required = listOf("agendamento_id", "novo_inicio", "nome_paciente", "telefone_paciente"),
             ))

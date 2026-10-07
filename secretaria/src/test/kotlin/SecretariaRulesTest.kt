@@ -101,6 +101,22 @@ class SecretariaRulesTest {
         assertNull(SecretariaTokens("outro-segredo-de-teste-com-mais-de-32-caracteres").verify(token))
         assertNull(SecretariaTokens("segredo-de-teste-com-mais-de-32-caracteres!!", ttlMillis = -1000).let { it.verify(it.issue(1)) })
     }
+    @Test
+    fun `atendimento do medico em uma frase, agrupando dias seguidos iguais`() {
+        fun w(day: Int, start: Int, end: Int, slot: Int = 30) = ScheduleWindow(day, start * 60, end * 60, slot)
+        val weekdays = (1..5).flatMap { listOf(w(it, 8, 12), w(it, 14, 18)) }
+        assertEquals("segunda a sexta: 08:00–12:00 e 14:00–18:00, consultas a cada 30 min", SecretariaSlots.describe(weekdays))
+        assertEquals(
+            "segunda a sexta: 08:00–12:00 e 14:00–18:00; sábado: 08:00–12:00, consultas a cada 30 min",
+            SecretariaSlots.describe(weekdays + w(6, 8, 12)),
+        )
+        // dias que não são seguidos não viram intervalo ("segunda a quarta" estaria errado)
+        assertEquals("segunda: 08:00–12:00; quarta: 08:00–12:00, consultas a cada 20 min", SecretariaSlots.describe(listOf(w(1, 8, 12, 20), w(3, 8, 12, 20))))
+        assertEquals("terça e quarta: 09:00–11:00, consultas a cada 45 min", SecretariaSlots.describe(listOf(w(2, 9, 11, 45), w(3, 9, 11, 45))))
+        assertEquals("sem horário de atendimento cadastrado", SecretariaSlots.describe(emptyList()))
+        assertEquals(null, SecretariaSlots.slotMinutesOf(listOf(w(1, 8, 12, 20), w(1, 14, 18, 30))))
+        assertEquals("segunda-feira, 05/10", SecretariaSlots.dayLabel(java.time.LocalDate.of(2026, 10, 5)))
+    }
 }
 
 class SecretariaLiveUrlTest {
@@ -136,4 +152,5 @@ class SecretariaJsonContractTest {
         val window = production.encodeToString(schemas.secretaria.ScheduleWindowDto.serializer(), schemas.secretaria.ScheduleWindowDto(1, "08:00", "12:00"))
         assertTrue(window.contains("\"slotMinutes\":30"), window)
     }
+
 }

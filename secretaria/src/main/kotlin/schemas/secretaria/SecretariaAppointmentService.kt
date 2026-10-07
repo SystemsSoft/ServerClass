@@ -25,6 +25,15 @@ import java.util.Locale
 /** Janela semanal de um médico, em minutos locais desde 00:00. */
 data class ScheduleWindow(val weekday: Int, val startMinute: Int, val endMinute: Int, val slotMinutes: Int)
 
+/** Agenda de um médico num período: janelas semanais (com a duração da consulta) e horários livres (hora local). */
+data class DoctorAvailability(
+    val doctorId: Long,
+    val doctorName: String,
+    val specialty: String,
+    val windows: List<ScheduleWindow>,
+    val freeSlots: List<LocalDateTime>,
+)
+
 /** Regras puras de agenda (sem banco) — testáveis isoladamente. */
 object SecretariaSlots {
     private val LABEL = DateTimeFormatter.ofPattern("EEEE, dd/MM 'às' HH:mm", Locale.forLanguageTag("pt-BR"))
@@ -52,6 +61,48 @@ object SecretariaSlots {
     }
 
     fun label(start: LocalDateTime): String = start.format(LABEL)
+
+    private val DAY_LABEL = DateTimeFormatter.ofPattern("EEEE, dd/MM", Locale.forLanguageTag("pt-BR"))
+    private val WEEKDAY_NAMES = listOf("domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado") // índice = weekday
+    private val WEEK_ORDER = listOf(1, 2, 3, 4, 5, 6, 0) // segunda primeiro
+
+    /** "segunda-feira, 05/10". */
+    fun dayLabel(date: LocalDate): String = date.format(DAY_LABEL)
+
+    /** Duração da consulta, se for a mesma em todas as janelas do médico (senão, null: ver [describe]). */
+    fun slotMinutesOf(windows: List<ScheduleWindow>): Int? = windows.map { it.slotMinutes }.distinct().singleOrNull()
+
+    /**
+     * Atendimento do médico em uma frase, para a IA falar certo:
+     * "segunda a sexta: 08:00–12:00 e 14:00–18:00, consultas a cada 30 min". Dias seguidos com o mesmo horário são
+     * agrupados; se a duração varia entre as janelas, ela vai em cada janela.
+     */
+    fun describe(windows: List<ScheduleWindow>): String {
+        if (windows.isEmpty()) return "sem horário de atendimento cadastrado"
+        val single = slotMinutesOf(windows)
+        fun hm(minute: Int) = "%02d:%02d".format(minute / 60, minute % 60)
+        fun dayText(day: List<ScheduleWindow>) = day.sortedBy { it.startMinute }.joinToString(" e ") { w ->
+            "${hm(w.startMinute)}–${hm(w.endMinute)}" + if (single == null) " (a cada ${w.slotMinutes} min)" else ""
+        }
+        val groups = mutableListOf<Pair<MutableList<Int>, String>>() // dias seguidos com o mesmo texto
+        for (weekday in WEEK_ORDER) {
+            val day = windows.filter { it.weekday == weekday }
+            if (day.isEmpty()) continue
+            val text = dayText(day)
+            val last = groups.lastOrNull()
+            val consecutive = last != null && WEEK_ORDER.indexOf(last.first.last()) == WEEK_ORDER.indexOf(weekday) - 1
+            if (last != null && consecutive && last.second == text) last.first += weekday else groups += mutableListOf(weekday) to text
+        }
+        val body = groups.joinToString("; ") { (days, text) ->
+            val names = when (days.size) {
+                1 -> WEEKDAY_NAMES[days[0]]
+                2 -> "${WEEKDAY_NAMES[days[0]]} e ${WEEKDAY_NAMES[days[1]]}"
+                else -> "${WEEKDAY_NAMES[days.first()]} a ${WEEKDAY_NAMES[days.last()]}"
+            }
+            "$names: $text"
+        }
+        return if (single != null) "$body, consultas a cada $single min" else body
+    }
 }
 
 sealed class BookResult {
@@ -71,19 +122,19 @@ class SecretariaAppointmentService(
     // ── horários livres ──────────────────────────────────────────────────────
 
     /**
-     * Próximos horários livres. Filtra por médico e/ou especialidade (texto parcial, sem diferenciar
-     * maiúsculas). Devolve os mais próximos primeiro, até [limit].
+     * Agenda de cada médico no período: as janelas semanais (com a duração da consulta de cada uma) e os horários
+     * livres, já sem os ocupados e sem os que ficam antes da antecedência mínima. Filtra por médico e/ou especialidade.
      */
-    suspend fun availableSlots(
+    suspend fun availability(
         clinic: ClinicInfo,
         doctorId: Long?,
         specialty: String?,
         fromDate: LocalDate,
         days: Int,
-        limit: Int,
-    ): List<SlotDto> = database.dbQuery {
+    ): List<DoctorAvailability> = database.dbQuery {
         val doctors = (DoctorsTable innerJoin SpecialtiesTable).selectAll()
             .where { (DoctorsTable.clinicId eq clinic.id) and (DoctorsTable.active eq true) }
+            .orderBy(DoctorsTable.name)
             .filter { doctorId == null || it[DoctorsTable.id] == doctorId }
             .filter { specialty.isNullOrBlank() || specialtyMatches(it[SpecialtiesTable.name], specialty) }
         if (doctors.isEmpty()) return@dbQuery emptyList()
@@ -105,17 +156,33 @@ class SecretariaAppointmentService(
             .map { it[AppointmentsTable.doctorId] to it[AppointmentsTable.startsAt] }
             .toSet()
 
-        doctors.flatMap { d ->
+        doctors.map { d ->
             val id = d[DoctorsTable.id]
-            (0 until days).flatMap { offset ->
-                SecretariaSlots.generate(fromDate.plusDays(offset.toLong()), windows[id].orEmpty())
-            }.mapNotNull { local ->
-                val ms = local.toEpochMs(clinic.zone)
-                if (ms < earliest || (id to ms) in taken) null
-                else ms to SlotDto(id, d[DoctorsTable.name], d[SpecialtiesTable.name], local.format(LOCAL_ISO), SecretariaSlots.label(local))
-            }
-        }.sortedBy { it.first }.take(limit).map { it.second }
+            val own = windows[id].orEmpty()
+            val free = (0 until days).flatMap { offset -> SecretariaSlots.generate(fromDate.plusDays(offset.toLong()), own) }
+                .filter { local -> local.toEpochMs(clinic.zone).let { ms -> ms >= earliest && (id to ms) !in taken } }
+            DoctorAvailability(id, d[DoctorsTable.name], d[SpecialtiesTable.name], own, free)
+        }
     }
+
+    /**
+     * Próximos horários livres de todos os médicos filtrados, os mais próximos primeiro, até [limit]
+     * (lista "achatada" usada pelo painel).
+     */
+    suspend fun availableSlots(
+        clinic: ClinicInfo,
+        doctorId: Long?,
+        specialty: String?,
+        fromDate: LocalDate,
+        days: Int,
+        limit: Int,
+    ): List<SlotDto> = availability(clinic, doctorId, specialty, fromDate, days)
+        .flatMap { a ->
+            a.freeSlots.map { local ->
+                local.toEpochMs(clinic.zone) to SlotDto(a.doctorId, a.doctorName, a.specialty, local.format(LOCAL_ISO), SecretariaSlots.label(local))
+            }
+        }
+        .sortedBy { it.first }.take(limit).map { it.second }
 
     // ── marcar / remarcar / cancelar ─────────────────────────────────────────
 

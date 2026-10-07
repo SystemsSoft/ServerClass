@@ -148,9 +148,11 @@ class SecretariaBridgeTest {
 
                 say("""{"toolCall":{"functionCalls":[{"id":"t1","name":"consultar_horarios_disponiveis","args":{"especialidade":"Cardiologia","dias":2}}]}}""")
                 val slots = next()["toolResponse"]!!.jsonObject["functionResponses"]!!.jsonArray.first().jsonObject["response"]!!.jsonObject
-                val slot = slots["horarios"]!!.jsonArray.first().jsonObject
+                val doctor = slots["medicos"]!!.jsonArray.first().jsonObject
+                val day = doctor["dias"]!!.jsonArray.first().jsonObject
+                val inicio = day["data"]!!.jsonPrimitive.content + "T" + day["horarios_livres"]!!.jsonArray.first().jsonPrimitive.content
 
-                say("""{"toolCall":{"functionCalls":[{"id":"t2","name":"agendar_consulta","args":{"medico_id":${slot["medico_id"]},"inicio":${slot["inicio"]},"nome_paciente":"Ana Souza","telefone_paciente":"(21) 98765-4321"}}]}}""")
+                say("""{"toolCall":{"functionCalls":[{"id":"t2","name":"agendar_consulta","args":{"medico_id":${doctor["medico_id"]},"inicio":"$inicio","nome_paciente":"Ana Souza","telefone_paciente":"(21) 98765-4321"}}]}}""")
                 next() // toolResponse do agendamento
                 say("""{"serverContent":{"outputTranscription":{"text":"Pronto, consulta marcada!"}}}""")
                 say("""{"serverContent":{"turnComplete":true}}""")

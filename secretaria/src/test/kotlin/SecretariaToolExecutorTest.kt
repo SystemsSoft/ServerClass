@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import schemas.secretaria.CallChannel
 import schemas.secretaria.CallIntent
 import schemas.secretaria.CallOutcome
+import schemas.secretaria.ScheduleWindowDto
 import services.secretaria.SecretariaCallContext
 import services.secretaria.SecretariaToolExecutor
 import kotlin.test.Test
@@ -47,12 +48,21 @@ class SecretariaToolExecutorTest {
         assertEquals(2, doctors.size)
         assertEquals(listOf("Cardiologia", "Consulta geral"), list["especialidades"]!!.jsonArray.map { it.jsonPrimitive.content })
 
+        // por médico e por dia, com a duração da consulta e o atendimento (fixture: seg-sex 08-12 e 14-18, 30 min)
         val slots = env.run("consultar_horarios_disponiveis", """{"especialidade":"cardio","dias":1}""").response
         assertTrue(slots.ok)
-        val first = slots["horarios"]!!.jsonArray.first().jsonObject
-        assertEquals(env.cardio.id, first["medico_id"]!!.jsonPrimitive.content.toLong())
-        assertEquals("2026-10-05T09:30", first["inicio"]!!.jsonPrimitive.content)
-        assertTrue(slots["horarios"]!!.jsonArray.size <= 8)
+        val doctor = slots["medicos"]!!.jsonArray.single().jsonObject
+        assertEquals(env.cardio.id, doctor["medico_id"]!!.jsonPrimitive.content.toLong())
+        assertEquals(30, doctor["duracao_consulta_min"]!!.jsonPrimitive.content.toInt())
+        assertEquals("segunda a sexta: 08:00–12:00 e 14:00–18:00, consultas a cada 30 min", doctor["atendimento"]!!.jsonPrimitive.content)
+        val today = doctor["dias"]!!.jsonArray.single().jsonObject
+        assertEquals("2026-10-05", today["data"]!!.jsonPrimitive.content)
+        assertEquals("segunda-feira, 05/10", today["dia"]!!.jsonPrimitive.content)
+        // agora é segunda 09:00: com 30 min de antecedência, o primeiro é 09:30; o dia todo, de 30 em 30 (nada de 10:15)
+        val times = today["horarios_livres"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(listOf("09:30", "10:00", "10:30", "11:00", "11:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"), times)
+        assertTrue(slots["como_usar"]!!.jsonPrimitive.content.contains("data + \"T\" + horário"))
+        assertNull(slots["mensagem"])
 
         // especialidade que a clínica NÃO tem: não é "sem horário", é "não atendemos" + o que ela atende
         val none = env.run("consultar_horarios_disponiveis", """{"especialidade":"dermatologia"}""").response
@@ -64,12 +74,55 @@ class SecretariaToolExecutorTest {
         // variações do nome acham a especialidade cadastrada; especialidade diferente com começo parecido, não
         val viaVariant = env.run("consultar_horarios_disponiveis", """{"especialidade":"cardiologista","dias":1}""").response
         assertTrue(viaVariant.ok, viaVariant.toString())
-        assertEquals(env.cardio.id, viaVariant["horarios"]!!.jsonArray.first().jsonObject["medico_id"]!!.jsonPrimitive.content.toLong())
+        assertEquals(env.cardio.id, viaVariant["medicos"]!!.jsonArray.single().jsonObject["medico_id"]!!.jsonPrimitive.content.toLong())
         assertFalse(env.run("consultar_horarios_disponiveis", """{"especialidade":"neurologista"}""").response.ok)
 
         // a busca por parte do nome continua valendo (mesma regra de antes) e sem especialidade busca em todos
         assertTrue(env.run("consultar_horarios_disponiveis", """{"especialidade":"Consulta"}""").response.ok)
         assertTrue(env.run("consultar_horarios_disponiveis", """{"dias":1}""").response.ok)
+    }
+
+    @Test
+    fun `cada medico no seu intervalo, varios dias, e horario fora da grade e recusado com orientacao`() {
+        val env = Env()
+        // Cardiologia passa a atender de 20 em 20 min de manhã e de 40 em 40 à tarde, só terça e quinta
+        runBlocking {
+            env.fx.catalog.replaceSchedule(
+                env.clinic.id, env.cardio.id,
+                listOf(
+                    ScheduleWindowDto(2, "08:00", "10:00", 20), ScheduleWindowDto(2, "14:00", "16:00", 40),
+                    ScheduleWindowDto(4, "08:00", "10:00", 20), ScheduleWindowDto(4, "14:00", "16:00", 40),
+                ),
+            )
+        }
+        val all = env.run("consultar_horarios_disponiveis", """{"dias":14}""").response
+        val byName = all["medicos"]!!.jsonArray.associateBy { it.jsonObject["especialidade"]!!.jsonPrimitive.content }.mapValues { it.value.jsonObject }
+
+        val cardio = byName.getValue("Cardiologia")
+        assertNull(cardio["duracao_consulta_min"]) // varia por janela: vai no texto do atendimento
+        assertEquals(
+            "terça: 08:00–10:00 (a cada 20 min) e 14:00–16:00 (a cada 40 min); quinta: 08:00–10:00 (a cada 20 min) e 14:00–16:00 (a cada 40 min)",
+            cardio["atendimento"]!!.jsonPrimitive.content,
+        )
+        val tuesday = cardio["dias"]!!.jsonArray.first().jsonObject
+        assertEquals("2026-10-06", tuesday["data"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("08:00", "08:20", "08:40", "09:00", "09:20", "09:40", "14:00", "14:40", "15:20"),
+            tuesday["horarios_livres"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(4, cardio["dias"]!!.jsonArray.size) // ter e qui por duas semanas
+
+        // Consulta geral (30 min, seg-sex): 14 dias têm 10 dias úteis; lista 5 e avisa que há mais
+        val geral = byName.getValue("Consulta geral")
+        assertEquals(30, geral["duracao_consulta_min"]!!.jsonPrimitive.content.toInt())
+        assertEquals(5, geral["dias"]!!.jsonArray.size)
+        assertEquals(true, geral["ha_mais_dias"]!!.jsonPrimitive.boolean)
+
+        // horário que não existe na grade (08:10 com consultas de 20 em 20) é recusado e a IA é orientada
+        val wrong = env.book(start = "2026-10-06T08:10")
+        assertFalse(wrong.response.ok)
+        assertTrue(wrong.response.error!!.contains("intervalo de consulta do médico"), wrong.response.error)
+        assertTrue(env.book(start = "2026-10-06T08:20").response.ok)
     }
 
     @Test
