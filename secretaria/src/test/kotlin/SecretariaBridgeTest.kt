@@ -52,6 +52,7 @@ import services.secretaria.SecretariaLiveConfig
 import java.util.concurrent.CopyOnWriteArrayList
 import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
+import io.ktor.client.request.request
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -128,6 +129,61 @@ class SecretariaBridgeTest {
         is Frame.Text -> frame.readText()
         is Frame.Binary -> String(frame.data, Charsets.UTF_8)
         else -> null
+    }
+
+    // ── custo real: a IA informa o consumo e ele fica gravado na chamada ─────
+
+    @Test
+    fun `custo real - consumo informado pela Gemini fica na chamada e no relatorio`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val clinic = fx.clinic(boot.clinicId)
+        val gemini = fake { g ->
+            with(g) {
+                handshake()
+                // dois turnos, cada um com o seu consumo
+                say("""{"usageMetadata":{"promptTokenCount":2500,"responseTokenCount":960,"promptTokensDetails":[{"modality":"TEXT","tokenCount":600},{"modality":"AUDIO","tokenCount":1900}],"responseTokensDetails":[{"modality":"AUDIO","tokenCount":960}]}}""")
+                say("""{"usageMetadata":{"promptTokenCount":1000,"responseTokenCount":500}}""")
+                say("""{"serverContent":{"outputTranscription":{"text":"Até logo!"}}}""")
+                say("""{"serverContent":{"turnComplete":true}}""")
+                runCatching { while (true) next() }
+            }
+        }
+        testApplication {
+            start(fx, config({ gemini.url }))
+            val client = createClient { install(ClientWebSockets) }
+            var callId = -1L
+            client.webSocket("/ws/secretaria/${boot.publicKey}?consent=true") {
+                withTimeout(15_000) {
+                    callId = Json.parseToJsonElement(text(incoming.receive())!!).jsonObject["callId"]!!.jsonPrimitive.content.toLong()
+                    while (true) { if (text(incoming.receive())?.contains("Até logo!") == true) break }
+                    send(Frame.Text("""{"type":"end"}"""))
+                }
+            }
+            val call = eventually { runBlocking { fx.calls.get(clinic.id, callId) }?.takeIf { it.aiTokens != null } }
+            // 1900+600+960 + (1000 áudio + 500 áudio) = 4960 tokens
+            assertEquals(4960L, call.aiTokens)
+            assertFalse(call.aiFreeKey)
+            assertTrue(call.aiCostBrl!! > 0)
+            val report = (fx.reports.summary(clinic, java.time.LocalDate.of(2026, 10, 5), java.time.LocalDate.of(2026, 10, 5)) as ServiceResult.Ok).value
+            // rota de administração: mesmo consumo, somado por chave (a do teste é "t", paga)
+            System.setProperty("secretaria.adminKey", "chave-admin-de-teste")
+            suspend fun usage(key: String?) = client.request("/secretaria/admin/usage?from=2026-10-01&to=2026-10-31") {
+                method = io.ktor.http.HttpMethod.Get
+                key?.let { header("X-Admin-Key", it) }
+            }
+            assertEquals(io.ktor.http.HttpStatusCode.Forbidden, usage(null).status)
+            assertEquals(io.ktor.http.HttpStatusCode.Forbidden, usage("errada").status)
+            val summary = Json.parseToJsonElement(usage("chave-admin-de-teste").bodyAsText()).jsonObject
+            val key = summary["byKey"]!!.jsonArray.single().jsonObject
+            assertEquals("t", key["key"]!!.jsonPrimitive.content)
+            assertEquals("false", key["free"]!!.jsonPrimitive.content)
+            assertEquals("4960", key["tokens"]!!.jsonPrimitive.content)
+            assertEquals(Math.round(call.aiCostBrl!! * 100) / 100.0, summary["totalCostBrl"]!!.jsonPrimitive.content.toDouble())
+            assertEquals(0, summary["unmeasuredCalls"]!!.jsonPrimitive.content.toInt())
+            assertEquals(1, report.aiMeasuredCalls)
+            assertEquals(Math.round(call.aiCostBrl!! * 100) / 100.0, report.aiCostBrl)
+        }
     }
 
     // ── paciente do app: identificado pelo CPF desde o primeiro segundo ──────

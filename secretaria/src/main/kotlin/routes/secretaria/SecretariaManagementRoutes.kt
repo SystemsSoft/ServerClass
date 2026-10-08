@@ -29,6 +29,7 @@ import schemas.secretaria.UpdateClinicRequest
 import schemas.secretaria.UpdateProfileRequest
 import schemas.secretaria.UpdateSettingsRequest
 import schemas.secretaria.UpdateTeamMemberRequest
+import schemas.secretaria.UsageSummaryDto
 import java.security.MessageDigest
 
 private fun config(property: String, env: String): String? = System.getProperty(property) ?: System.getenv(env)
@@ -50,6 +51,26 @@ internal fun Route.managementRoutes(api: SecretariaApi) {
         } catch (e: java.time.DateTimeException) {
             call.bad("Fuso horário inválido")
         }
+    }
+
+    /** Consumo e custo da IA por chave do Gemini (todas as clínicas). ?from=AAAA-MM-DD&to=AAAA-MM-DD; padrão: últimos 30 dias. */
+    get("/admin/usage") {
+        if (!call.requireAdminKey()) return@get
+        val zone = java.time.ZoneId.of("America/Sao_Paulo")
+        val today = java.time.LocalDate.now(zone)
+        val to = call.dateParam("to", today) ?: return@get call.bad("to inválido (AAAA-MM-DD)")
+        val from = call.dateParam("from", to.minusDays(29)) ?: return@get call.bad("from inválido (AAAA-MM-DD)")
+        if (from.isAfter(to)) return@get call.bad("from deve ser antes de to")
+        val (byKey, unmeasured) = api.calls.usageByKey(
+            from.atStartOfDay(zone).toInstant().toEpochMilli(),
+            to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
+        )
+        call.respond(
+            UsageSummaryDto(
+                from.toString(), to.toString(), api.calls.usdBrl(), byKey,
+                Math.round(byKey.sumOf { it.costBrl } * 100) / 100.0, unmeasured,
+            ),
+        )
     }
 
     post("/admin/plans") {

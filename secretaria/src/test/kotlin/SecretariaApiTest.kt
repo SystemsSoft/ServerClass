@@ -637,6 +637,15 @@ class SecretariaApiTest {
             assertEquals("52998224725", profile["cpf"]!!.jsonPrimitive.content)
             assertTrue(profile["hasPhoto"]!!.jsonPrimitive.boolean)
 
+            // entrar pelo CPF em outro aparelho: o servidor devolve o cadastro salvo
+            suspend fun lookup(cpf: String) = req(HttpMethod.Post, "/secretaria/public/patients/lookup", body = """{"cpf":"$cpf"}""")
+            assertEquals(HttpStatusCode.NotFound, lookup("390.533.447-05").status)
+            assertEquals(HttpStatusCode.BadRequest, lookup("123").status)
+            val back = json(lookup("52998224725").bodyAsText()).jsonObject
+            assertEquals("Ana Souza", back["name"]!!.jsonPrimitive.content)
+            assertEquals("Unimed", back["healthPlan"]!!.jsonPrimitive.content)
+            assertEquals(SecretariaProfileTest.JPEG_DATA_URL, back["photo"]!!.jsonPrimitive.content)
+
             // consultas do app
             suspend fun mine(cpf: String) = req(HttpMethod.Post, "/secretaria/public/patients/appointments", body = """{"cpf":"$cpf"}""")
             assertEquals(HttpStatusCode.NotFound, mine("390.533.447-05").status)

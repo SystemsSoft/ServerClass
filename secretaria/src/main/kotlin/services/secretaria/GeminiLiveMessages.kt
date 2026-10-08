@@ -1,5 +1,8 @@
 package services.secretaria
 
+import kotlinx.serialization.json.JsonPrimitive
+import schemas.secretaria.TokenUsage
+
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -26,6 +29,8 @@ data class GeminiServerMessage(
     val outputText: String? = null,
     val turnComplete: Boolean = false,
     val interrupted: Boolean = false,
+    /** Tokens desta mensagem (`usageMetadata`), por tipo; null se a mensagem não trouxer. */
+    val usage: TokenUsage? = null,
 ) {
     /** Mensagens de função são resolvidas pelo servidor — o cliente (PWA) não precisa vê-las. */
     val internalOnly: Boolean get() = toolCalls.isNotEmpty() || toolCancellation || setupComplete
@@ -56,6 +61,31 @@ object GeminiLiveMessages {
             outputText = content?.get("outputTranscription")?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull,
             turnComplete = content?.get("turnComplete")?.jsonPrimitive?.booleanOrNull == true,
             interrupted = content?.get("interrupted")?.jsonPrimitive?.booleanOrNull == true,
+            usage = (root["usageMetadata"] as? JsonObject)?.let(::usageOf),
+        )
+    }
+
+    /**
+     * `usageMetadata` -> tokens por tipo. Usa o detalhamento por modalidade (AUDIO/TEXT); o que não vier detalhado
+     * conta como ÁUDIO (o tipo mais caro), para o custo nunca ficar abaixo do real.
+     */
+    fun usageOf(meta: JsonObject): TokenUsage {
+        fun count(key: String) = (meta[key] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
+        fun details(key: String): Map<String, Long> = (meta[key] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+            .groupBy({ (it["modality"] as? JsonPrimitive)?.contentOrNull?.uppercase() ?: "AUDIO" }, { (it["tokenCount"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L })
+            .mapValues { it.value.sum() }
+        val prompt = count("promptTokenCount")
+        val response = count("responseTokenCount").takeIf { it > 0 } ?: count("candidatesTokenCount")
+        val inDetails = details("promptTokensDetails")
+        val outDetails = details("responseTokensDetails").ifEmpty { details("candidatesTokensDetails") }
+        val inText = inDetails["TEXT"] ?: 0
+        val outText = outDetails["TEXT"] ?: 0
+        return TokenUsage(
+            inputAudio = maxOf(prompt - inText, inDetails["AUDIO"] ?: 0),
+            inputText = inText,
+            outputAudio = maxOf(response - outText, outDetails["AUDIO"] ?: 0),
+            outputText = outText,
+            reports = 1,
         )
     }
 

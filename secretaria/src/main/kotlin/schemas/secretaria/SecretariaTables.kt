@@ -202,6 +202,14 @@ object CallsTable : Table("calls") {
     val recordingUrl = varchar("recording_url", 500).nullable()
     val aiModel = varchar("ai_model", 80).nullable()
 
+    /** Tokens da Gemini medidos na ligação (usageMetadata) e a chave usada — base do custo real. Nulos = não medido. */
+    val aiInputAudioTokens = long("ai_input_audio_tokens").nullable()
+    val aiInputTextTokens = long("ai_input_text_tokens").nullable()
+    val aiOutputAudioTokens = long("ai_output_audio_tokens").nullable()
+    val aiOutputTextTokens = long("ai_output_text_tokens").nullable()
+    val aiUsageReports = integer("ai_usage_reports").nullable()
+    val aiKey = varchar("ai_key", 20).nullable()
+
     override val primaryKey = PrimaryKey(id)
 
     init {

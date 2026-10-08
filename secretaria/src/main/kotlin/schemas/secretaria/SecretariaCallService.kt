@@ -25,6 +25,7 @@ data class StartedCall(val id: Long, val startedAt: Long)
 class SecretariaCallService(
     private val database: Database,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val pricing: AiPricing = AiPricing.fromConfig(),
 ) {
 
     init {
@@ -57,6 +58,41 @@ class SecretariaCallService(
                 it[callerPhone] = phone
             }
         }
+    }
+
+    /** Consumo da Gemini na ligação (tokens por tipo) e a chave usada; base do custo real. */
+    suspend fun setUsage(callId: Long, usage: TokenUsage, key: String?) {
+        database.dbQuery {
+            CallsTable.update({ CallsTable.id eq callId }) {
+                it[aiInputAudioTokens] = usage.inputAudio
+                it[aiInputTextTokens] = usage.inputText
+                it[aiOutputAudioTokens] = usage.outputAudio
+                it[aiOutputTextTokens] = usage.outputText
+                it[aiUsageReports] = usage.reports
+                it[aiKey] = key
+            }
+        }
+    }
+
+    fun usdBrl(): Double = pricing.usdBrl
+
+    /** Consumo e custo da IA por chave, de todas as clínicas, nas ligações encerradas entre [fromMs] e [toMs]. */
+    suspend fun usageByKey(fromMs: Long, toMs: Long): Pair<List<KeyUsageDto>, Int> = database.dbQuery {
+        val rows = CallsTable.selectAll()
+            .where { (CallsTable.startedAt greaterEq fromMs) and (CallsTable.startedAt less toMs) and (CallsTable.state eq CallState.ENCERRADA) }
+            .toList()
+        val measured = rows.filter { it.aiUsage() != null }
+        val byKey = measured.groupBy { it[CallsTable.aiKey] ?: "desconhecida" }.map { (key, list) ->
+            val free = isFreeKey(key)
+            val cost = list.sumOf { pricing.costBrl(it.aiUsage()!!, free) }
+            val minutes = list.sumOf { it[CallsTable.durationSeconds] ?: 0 } / 60.0
+            KeyUsageDto(
+                key = key, free = free, calls = list.size, minutes = Math.round(minutes * 10) / 10.0,
+                tokens = list.sumOf { it.aiUsage()!!.total }, costBrl = Math.round(cost * 100) / 100.0,
+                costPerMinuteBrl = if (minutes > 0) Math.round(cost / minutes * 1000) / 1000.0 else null,
+            )
+        }.sortedBy { it.key }
+        byKey to (rows.size - measured.size)
     }
 
     suspend fun setDoctor(callId: Long, doctorId: Long) {
@@ -244,6 +280,9 @@ class SecretariaCallService(
                 email = row.getOrNull(PatientsTable.email),
                 healthPlan = row.getOrNull(PatientsTable.healthPlan),
                 hasPhoto = row.getOrNull(PatientsTable.profileId)?.let { it in withPhoto } ?: false,
+                aiTokens = row.aiUsage()?.total,
+                aiCostBrl = row.aiUsage()?.let { pricing.costBrl(it, isFreeKey(row[CallsTable.aiKey])) },
+                aiFreeKey = isFreeKey(row[CallsTable.aiKey]),
             )
         }
     }

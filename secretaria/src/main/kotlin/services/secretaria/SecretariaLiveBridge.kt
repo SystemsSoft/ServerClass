@@ -24,6 +24,7 @@ import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
 import schemas.secretaria.SecretariaCallService
 import schemas.secretaria.Speaker
+import schemas.secretaria.TokenUsage
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -49,12 +50,21 @@ class SecretariaLiveConfig(
     companion object {
         fun readConfig(property: String, env: String): String? = System.getProperty(property) ?: System.getenv(env)
 
-        /** Mesmas chaves do restante do servidor (gemini-credentials.properties / variáveis de ambiente). */
-        fun keysFromConfig(): List<GeminiKey> = listOfNotNull(
-            readConfig("gemini.apiKeyFree1", "GEMINI_API_KEY_FREE_1")?.let { GeminiKey("gratuita-1", it) },
-            readConfig("gemini.apiKeyFree2", "GEMINI_API_KEY_FREE_2")?.let { GeminiKey("gratuita-2", it) },
-            readConfig("gemini.apiKey", "GEMINI_API_KEY")?.let { GeminiKey("paga", it) },
-        )
+        /**
+         * Mesmas chaves do restante do servidor (gemini-credentials.properties / variáveis de ambiente), na ordem em que
+         * são tentadas: gratuita-1, gratuita-2, paga. `secretaria.geminiKeys` (SECRETARIA_GEMINI_KEYS) restringe a quais
+         * usar, separadas por vírgula (ex.: `paga` para medir só o gasto da chave paga). Vazio/ausente = todas, como sempre.
+         */
+        fun keysFromConfig(): List<GeminiKey> {
+            val all = listOfNotNull(
+                readConfig("gemini.apiKeyFree1", "GEMINI_API_KEY_FREE_1")?.let { GeminiKey("gratuita-1", it) },
+                readConfig("gemini.apiKeyFree2", "GEMINI_API_KEY_FREE_2")?.let { GeminiKey("gratuita-2", it) },
+                readConfig("gemini.apiKey", "GEMINI_API_KEY")?.let { GeminiKey("paga", it) },
+            )
+            val only = readConfig("secretaria.geminiKeys", "SECRETARIA_GEMINI_KEYS")
+                ?.split(',')?.map { it.trim().lowercase() }?.filter { it.isNotEmpty() }.orEmpty()
+            return if (only.isEmpty()) all else all.filter { it.label in only }
+        }
 
         const val OFFICIAL_LIVE_URL =
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={key}"
@@ -98,6 +108,16 @@ class SecretariaLiveBridge(
 
     private data class Transcript(val speaker: Speaker, val text: String, val offsetMs: Long)
 
+    /** Soma dos tokens que a Gemini informa durante a ligação (usageMetadata) e qual chave atendeu. */
+    private class UsageMeter {
+        @Volatile var key: String? = null
+        private var total = TokenUsage()
+
+        @Synchronized fun add(usage: TokenUsage) { total += usage }
+
+        @Synchronized fun total() = total
+    }
+
     suspend fun run(clientSession: DefaultWebSocketServerSession, ctx: SecretariaCallContext, instruction: String, voice: String? = null) {
         val keys = config.keys()
         if (keys.isEmpty()) {
@@ -109,6 +129,7 @@ class SecretariaLiveBridge(
         // Transcrição gravada em segundo plano: o banco remoto não pode atrasar o áudio.
         val queue = Channel<Transcript>(Channel.UNLIMITED)
         val buffer = TranscriptBuffer(ctx.startedAt) { queue.trySend(it) }
+        val meter = UsageMeter()
         val writer = clientSession.launch {
             for (t in queue) {
                 runCatching { calls.appendMessage(ctx.callId, t.speaker, t.text, t.offsetMs) }
@@ -119,7 +140,7 @@ class SecretariaLiveBridge(
         try {
             var lastError: Throwable? = null
             for (entry in keys) {
-                when (val result = attempt(entry, clientSession, ctx, instruction, voice, buffer)) {
+                when (val result = attempt(entry, clientSession, ctx, instruction, voice, buffer, meter)) {
                     Attempt.Finished -> return
                     is Attempt.NotEstablished -> {
                         lastError = result.error
@@ -131,6 +152,12 @@ class SecretariaLiveBridge(
             clientSession.sendControl("error", "Não foi possível iniciar o atendimento agora. Tente novamente em instantes.")
         } finally {
             withContext(NonCancellable) {
+                // custo real: grava os tokens medidos e a chave usada (mesmo se a ligação caiu no meio)
+                val usage = meter.total()
+                if (usage.reports > 0 || meter.key != null) {
+                    runCatching { calls.setUsage(ctx.callId, usage, meter.key) }
+                        .onFailure { log.warn("Falha ao gravar o consumo da chamada {}: {}", ctx.callId, it.message) }
+                }
                 buffer.flushAll()
                 queue.close()
                 withTimeoutOrNull(5_000) { writer.join() }
@@ -145,6 +172,7 @@ class SecretariaLiveBridge(
         instruction: String,
         voice: String?,
         buffer: TranscriptBuffer,
+        meter: UsageMeter,
     ): Attempt {
         var established = false
         try {
@@ -153,13 +181,14 @@ class SecretariaLiveBridge(
                 val ready = withTimeoutOrNull(config.setupTimeoutMillis) { awaitSetupComplete() } ?: false
                 check(ready) { "Gemini não confirmou o setup" }
                 established = true
+                meter.key = entry.label
 
                 clientSession.send(Frame.Text(buildJsonObject {
                     put("type", "session_ready")
                     put("callId", ctx.callId)
                 }.toString()))
                 send(Frame.Text(GeminiLiveMessages.userText(SecretariaPersona.greeting(ctx.caller)).toString()))
-                relay(this, clientSession, ctx, buffer)
+                relay(this, clientSession, ctx, buffer, meter)
             }
             return Attempt.Finished
         } catch (e: CancellationException) {
@@ -185,6 +214,7 @@ class SecretariaLiveBridge(
         clientSession: DefaultWebSocketServerSession,
         ctx: SecretariaCallContext,
         buffer: TranscriptBuffer,
+        meter: UsageMeter,
     ) = coroutineScope {
         val startedAt = System.currentTimeMillis()
         val lastClientAt = AtomicLong(startedAt)
@@ -212,6 +242,7 @@ class SecretariaLiveBridge(
                     val bytes = frame.bytesOrNull() ?: continue
                     val message = GeminiLiveMessages.parse(bytes)
                     if (message != null) {
+                        message.usage?.let(meter::add)
                         buffer.onMessage(message)
                         if (message.toolCalls.isNotEmpty()) runTools(message.toolCalls, ctx, upstream, clientSession)
                         if (message.internalOnly) continue

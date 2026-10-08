@@ -8,7 +8,7 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /** Relatórios por período (menu Relatórios) e exportação CSV. */
-class SecretariaReportService(private val database: Database) {
+class SecretariaReportService(private val database: Database, private val pricing: AiPricing = AiPricing.fromConfig()) {
 
     suspend fun summary(clinic: ClinicInfo, from: LocalDate, to: LocalDate): ServiceResult<ReportDto> {
         validate(from, to)?.let { return it }
@@ -39,6 +39,11 @@ class SecretariaReportService(private val database: Database) {
                 DayCountDto(day.toString(), dayCalls.size, Math.round(seconds / 6.0) / 10.0, apptsPerDay[day].orEmpty().size)
             }
 
+            // custo real da IA: só ligações encerradas com consumo medido
+            val measured = ended.mapNotNull { row -> row.aiUsage()?.let { Triple(it, isFreeKey(row[CallsTable.aiKey]), row[CallsTable.durationSeconds] ?: 0) } }
+            val aiCost = measured.sumOf { (usage, free, _) -> pricing.costBrl(usage, free) }
+            val measuredMinutes = measured.sumOf { it.third } / 60.0
+
             ServiceResult.Ok(
                 ReportDto(
                     from = from.toString(),
@@ -56,6 +61,10 @@ class SecretariaReportService(private val database: Database) {
                     byStatus = counts(appts.map { it[AppointmentsTable.status].name.lowercase() }),
                     callsByHour = callsByHour.toList(),
                     perDay = perDay,
+                    aiCostBrl = Math.round(aiCost * 100) / 100.0,
+                    aiCostPerMinuteBrl = if (measuredMinutes > 0) Math.round(aiCost / measuredMinutes * 1000) / 1000.0 else null,
+                    aiMeasuredCalls = measured.size,
+                    aiFreeKeyCalls = measured.count { it.second },
                 ),
             )
         }

@@ -119,6 +119,30 @@ class SecretariaRulesTest {
     }
 }
 
+class SecretariaGeminiKeysTest {
+    private val props = listOf("gemini.apiKeyFree1", "gemini.apiKeyFree2", "gemini.apiKey", "secretaria.geminiKeys")
+
+    @kotlin.test.AfterTest
+    fun cleanup() = props.forEach(System::clearProperty)
+
+    private fun labels() = services.secretaria.SecretariaLiveConfig.keysFromConfig().map { it.label }
+
+    @Test
+    fun `por padrao usa todas na ordem gratuitas e paga, e secretaria geminiKeys restringe`() {
+        System.setProperty("gemini.apiKeyFree1", "a"); System.setProperty("gemini.apiKeyFree2", "b"); System.setProperty("gemini.apiKey", "c")
+        assertEquals(listOf("gratuita-1", "gratuita-2", "paga"), labels())
+
+        System.setProperty("secretaria.geminiKeys", "paga")
+        assertEquals(listOf("paga"), labels())
+        System.setProperty("secretaria.geminiKeys", " Gratuita-2 , paga ")
+        assertEquals(listOf("gratuita-2", "paga"), labels()) // mantém a ordem de tentativa
+        System.setProperty("secretaria.geminiKeys", "")
+        assertEquals(3, labels().size, "vazio = todas")
+        System.setProperty("secretaria.geminiKeys", "inexistente")
+        assertEquals(emptyList(), labels(), "rótulo desconhecido: nenhuma chave (a IA avisa que não está configurada)")
+    }
+}
+
 class SecretariaLiveUrlTest {
     @kotlin.test.AfterTest
     fun cleanup() {

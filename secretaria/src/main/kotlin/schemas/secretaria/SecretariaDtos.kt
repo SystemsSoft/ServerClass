@@ -106,6 +106,10 @@ data class CallDto(
     @EncodeDefault val email: String? = null,
     @EncodeDefault val healthPlan: String? = null,
     @EncodeDefault val hasPhoto: Boolean = false,
+    /** Consumo da IA medido na ligação (tokens) e o custo em reais; null = não medido. Chave gratuita: custo 0. */
+    @EncodeDefault val aiTokens: Long? = null,
+    @EncodeDefault val aiCostBrl: Double? = null,
+    @EncodeDefault val aiFreeKey: Boolean = false,
 )
 
 @Serializable
@@ -374,6 +378,11 @@ data class ReportDto(
     val byStatus: List<LabelCountDto>,
     /** 24 posições (0–23h, hora local da clínica). */
     val callsByHour: List<Int>,
+    /** Custo real da IA no período (só ligações medidas), em reais, e por minuto de ligação medida. */
+    @EncodeDefault val aiCostBrl: Double = 0.0,
+    @EncodeDefault val aiCostPerMinuteBrl: Double? = null,
+    @EncodeDefault val aiMeasuredCalls: Int = 0,
+    @EncodeDefault val aiFreeKeyCalls: Int = 0,
     val perDay: List<DayCountDto>,
 )
 
@@ -401,6 +410,17 @@ data class ProfileDto(
     @EncodeDefault val hasPhoto: Boolean = false,
 )
 
+/** Perfil devolvido ao app quando o CPF já tem cadastro (entrar pelo CPF em outro aparelho). [photo]: data URL, se tiver. */
+@Serializable
+data class ProfileLookupDto(
+    val cpf: String,
+    val name: String,
+    val phone: String,
+    val email: String,
+    val healthPlan: String,
+    @EncodeDefault val photo: String? = null,
+)
+
 /** O CPF vai no corpo (POST), nunca na URL: assim não fica nos logs de acesso. */
 @Serializable
 data class CpfRequest(val cpf: String)
@@ -420,6 +440,30 @@ data class PatientAppointmentDto(
 
 @Serializable
 data class PatientAppointmentsDto(val name: String, val upcoming: List<PatientAppointmentDto>, val history: List<PatientAppointmentDto>)
+
+/** Consumo da IA por chave do Gemini, somando todas as clínicas (rota de administração). */
+@Serializable
+data class KeyUsageDto(
+    val key: String,
+    val free: Boolean,
+    val calls: Int,
+    val minutes: Double,
+    val tokens: Long,
+    /** Custo em reais pelos preços configurados; 0 para chave gratuita. */
+    val costBrl: Double,
+    val costPerMinuteBrl: Double?,
+)
+
+@Serializable
+data class UsageSummaryDto(
+    val from: String,
+    val to: String,
+    val usdBrl: Double,
+    val byKey: List<KeyUsageDto>,
+    val totalCostBrl: Double,
+    /** Ligações do período sem consumo medido (feitas antes da medição, ou que não conectaram). */
+    val unmeasuredCalls: Int,
+)
 
 /** Foto do paciente para o painel, como data URL ("data:image/jpeg;base64,..."). */
 @Serializable

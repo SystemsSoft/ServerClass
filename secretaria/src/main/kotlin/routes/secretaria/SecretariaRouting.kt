@@ -99,6 +99,12 @@ private fun io.ktor.server.routing.Route.publicRoutes(api: SecretariaApi, allowe
         call.respondResult(api.profiles.save(body))
     }
 
+    /** Entrar pelo CPF: devolve o cadastro de quem já se cadastrou (404 = ir para o cadastro). */
+    post("/secretaria/public/patients/lookup") {
+        val body = call.receiveOrNull<CpfRequest>() ?: return@post call.badJson()
+        call.respondResult(api.profiles.lookup(body.cpf))
+    }
+
     /** Consultas do paciente (todas as clínicas) para a aba "Agendamentos" do app. */
     post("/secretaria/public/patients/appointments") {
         val body = call.receiveOrNull<CpfRequest>() ?: return@post call.badJson()
