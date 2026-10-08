@@ -5,6 +5,9 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 
 private const val MIN_PASSWORD = 10
 
+/** Senha inicial de quem a clínica adiciona à equipe (a pessoa pode trocar depois, no perfil, por uma de 10+). */
+private const val MIN_NEW_MEMBER_PASSWORD = 6
+
 /** Equipe da clínica, perfil e senha ("Meu perfil" e Configurações > Equipe). */
 class SecretariaTeamService(
     private val database: Database,
@@ -35,7 +38,7 @@ class SecretariaTeamService(
                 val name = request.name?.trim()
                 if (name.isNullOrEmpty() || name.length > 120) return@dbQuery invalid("Informe o nome do usuário.")
                 val password = request.password.orEmpty()
-                if (password.length < MIN_PASSWORD) return@dbQuery invalid("A senha deve ter ao menos $MIN_PASSWORD caracteres.")
+                if (password.length < MIN_NEW_MEMBER_PASSWORD) return@dbQuery invalid("A senha deve ter ao menos $MIN_NEW_MEMBER_PASSWORD caracteres.")
                 UsersTable.insert {
                     it[UsersTable.name] = name
                     it[UsersTable.email] = email

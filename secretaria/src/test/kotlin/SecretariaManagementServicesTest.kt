@@ -122,14 +122,15 @@ class SecretariaManagementServicesTest {
         fx.team.add(a.clinicId, AddTeamMemberRequest("dona@outra.test", "admin")).err(ErrorKind.CONFLICT) // já é membro
         fx.team.add(a.clinicId, AddTeamMemberRequest("x@x.test", "chefe", "X Y", "senha-bem-longa-1")).err(ErrorKind.INVALID) // papel
         fx.team.add(a.clinicId, AddTeamMemberRequest("sem-arroba", "admin", "X Y", "senha-bem-longa-1")).err(ErrorKind.INVALID)
-        fx.team.add(a.clinicId, AddTeamMemberRequest("curta@x.test", "admin", "X Y", "curta")).err(ErrorKind.INVALID) // senha fraca
+        fx.team.add(a.clinicId, AddTeamMemberRequest("curta@x.test", "admin", "X Y", "curta")).err(ErrorKind.INVALID) // 5 caracteres: curta
+        fx.team.add(a.clinicId, AddTeamMemberRequest("seis@x.test", "secretaria", "Seis Letras", "abc123")).ok() // 6 caracteres: vale
         fx.team.add(a.clinicId, AddTeamMemberRequest("semnome@x.test", "admin", null, "senha-bem-longa-1")).err(ErrorKind.INVALID)
 
-        assertEquals(3, fx.team.list(a.clinicId).size)
+        assertEquals(4, fx.team.list(a.clinicId).size) // maria, nova, a vinculada e a de senha de 6 caracteres
         assertEquals("admin", fx.team.changeRole(a.clinicId, novo.userId, "ADMIN").ok().role)
         fx.team.changeRole(a.clinicId, 9999, "admin").err(ErrorKind.NOT_FOUND)
         fx.team.remove(a.clinicId, novo.userId).ok()
-        assertEquals(2, fx.team.list(a.clinicId).size)
+        assertEquals(3, fx.team.list(a.clinicId).size)
         assertEquals(0, fx.auth.clinicsOf(novo.userId).size) // saiu da clínica, mas a conta continua existindo
         assertNotNull(fx.auth.login("nova@clinica.test", "senha-bem-longa-1"))
     }
