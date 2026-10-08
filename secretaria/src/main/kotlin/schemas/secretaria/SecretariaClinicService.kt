@@ -104,7 +104,7 @@ class SecretariaClinicService(
                     it[name] = DEFAULT_PLAN_NAME
                     it[monthlyPrice] = BigDecimal("199.00")
                     it[includedMinutes] = 300
-                    it[costPerMinute] = BigDecimal("0.5000")
+                    it[costPerMinute] = DEFAULT_COST_PER_MINUTE
                 }[PlansTable.id]
             SubscriptionsTable.insert {
                 it[SubscriptionsTable.clinicId] = clinicId
@@ -275,5 +275,8 @@ class SecretariaClinicService(
 
     companion object {
         const val DEFAULT_PLAN_NAME = "Plano Clínica"
+
+        /** Custo estimado por minuto de uso (R$), mostrado no painel. Medido na prática: ~R$ 0,09–0,10/min de IA. */
+        val DEFAULT_COST_PER_MINUTE: BigDecimal = BigDecimal("0.1200")
     }
 }

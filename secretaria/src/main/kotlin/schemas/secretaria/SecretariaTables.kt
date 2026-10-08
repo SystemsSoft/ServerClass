@@ -4,6 +4,10 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.update
+import java.math.BigDecimal
 
 /*
  * Banco `secretaria_db` da SecretárIA (atendimento por IA de clínicas).
@@ -317,6 +321,10 @@ object SecretariaSchema {
                 AppointmentsTable, PlansTable, SubscriptionsTable, NotificationsTable,
                 withLogs = false, // o aviso de "índices extras" do Exposed é só ruído: as FKs já criam seus índices
             )
+            // estimativa antiga (R$ 0,50/min) do plano padrão vira R$ 0,12/min; um valor ajustado à mão não é tocado
+            PlansTable.update({ (PlansTable.name eq SecretariaClinicService.DEFAULT_PLAN_NAME) and (PlansTable.costPerMinute eq BigDecimal("0.5000")) }) {
+                it[costPerMinute] = SecretariaClinicService.DEFAULT_COST_PER_MINUTE
+            }
         }
     }
 }

@@ -10,6 +10,10 @@ import schemas.secretaria.CallOutcome
 import schemas.secretaria.EmailAlreadyUsedException
 import schemas.secretaria.Speaker
 import schemas.secretaria.parseLocalIso
+import schemas.secretaria.PlansTable
+import schemas.secretaria.SecretariaSchema
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -272,13 +276,29 @@ class SecretariaServicesTest {
         assertEquals(1, d.upcomingAppointments.size)
         assertEquals(1, d.unreadNotifications)
 
-        // plano: só conta o ciclo atual (a chamada de ontem é anterior ao início): 154 + 100 = 254 s -> 5 min; R$ 0,50/min
+        // plano: só conta o ciclo atual (a chamada de ontem é anterior ao início): 154 + 100 = 254 s -> 5 min; R$ 0,12/min
         val plan = assertNotNull(d.plan)
         assertEquals(5, plan.usedMinutes)
-        assertEquals(2.5, plan.estimatedCost)
+        assertEquals(0.12, plan.costPerMinute)
+        assertEquals(0.6, plan.estimatedCost)
         assertEquals(5.0 / 300, plan.usageRatio, 1e-9)
 
         fx.clinics.markNotificationsRead(clinic.id, boot.userId)
         assertEquals(0, fx.clinics.unreadNotifications(clinic.id, boot.userId))
+    }
+
+    @Test
+    fun `estimativa antiga de R$ 0,50 por minuto do plano padrao vira R$ 0,12 ao subir o servidor`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val clinic = fx.clinic(fx.bootstrap().clinicId)
+        // simula o banco de produção, com o valor antigo
+        transaction(fx.db) { PlansTable.update { it[costPerMinute] = java.math.BigDecimal("0.5000") } }
+        SecretariaSchema.create(fx.db)
+        assertEquals(0.12, fx.clinics.planUsage(clinic.id, clinic.zone)!!.costPerMinute)
+
+        // valor ajustado à mão (diferente do antigo padrão) é mantido
+        transaction(fx.db) { PlansTable.update { it[costPerMinute] = java.math.BigDecimal("0.3000") } }
+        SecretariaSchema.create(fx.db)
+        assertEquals(0.3, fx.clinics.planUsage(clinic.id, clinic.zone)!!.costPerMinute)
     }
 }
