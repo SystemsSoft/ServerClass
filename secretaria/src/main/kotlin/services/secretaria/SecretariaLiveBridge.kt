@@ -278,6 +278,9 @@ class SecretariaLiveBridge(
         toGemini.cancel(); toClient.cancel(); watchdog.cancel()
 
         if (endedBy.get() == "gemini") {
+            // o motivo que a Gemini manda ao fechar (ex.: 1007 "audio content type not supported") é o que explica a queda
+            val reason = withTimeoutOrNull(1_000) { upstream.closeReason.await() }
+            log.warn("Chamada {}: a Gemini fechou a sessão. Motivo: {}", ctx.callId, reason ?: "não informado")
             runCatching { clientSession.sendControl("error", "A assistente encerrou a conexão. Ligue novamente.") }
         }
         log.info("Chamada {} encerrada por: {}", ctx.callId, endedBy.get())
@@ -289,6 +292,8 @@ class SecretariaLiveBridge(
         upstream: DefaultClientWebSocketSession,
         clientSession: DefaultWebSocketServerSession,
     ) {
+        // o app toca um sinal de espera e mostra "Verificando…": a IA não pode anunciar isso em voz (derruba a sessão)
+        if (toolCalls.any { it.name != SILENT_TOOL }) runCatching { clientSession.send(Frame.Text("""{"type":"working"}""")) }
         val results = toolCalls.map { call ->
             val result = tools.execute(ctx, call.name, call.args)
             result.uiEvent?.let { clientSession.send(Frame.Text(it.toString())) }
@@ -339,5 +344,7 @@ class SecretariaLiveBridge(
 
     private companion object {
         const val MAX_CLIENT_FRAME_BYTES = 256 * 1024
+        /** Função rápida e invisível para o paciente: não toca o sinal de espera. */
+        const val SILENT_TOOL = "registrar_assunto"
     }
 }

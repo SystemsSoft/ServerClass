@@ -105,6 +105,8 @@ object DoctorsTable : Table("doctors") {
     val name = varchar("name", 120)
     val crm = varchar("crm", 20).nullable()
     val active = bool("active").default(true)
+    /** Máximo de consultas por dia (null = sem limite, só a agenda manda). Atingido, o dia some dos horários livres. */
+    val maxPerDay = integer("max_per_day").nullable()
 
     override val primaryKey = PrimaryKey(id)
 

@@ -16,6 +16,7 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -155,11 +156,16 @@ class SecretariaAppointmentService(
             }
             .map { it[AppointmentsTable.doctorId] to it[AppointmentsTable.startsAt] }
             .toSet()
+        // consultas já marcadas por médico e dia (para o limite diário)
+        val perDay = taken.groupingBy { (doctor, ms) -> doctor to Instant.ofEpochMilli(ms).atZone(clinic.zone).toLocalDate() }.eachCount()
 
         doctors.map { d ->
             val id = d[DoctorsTable.id]
             val own = windows[id].orEmpty()
-            val free = (0 until days).flatMap { offset -> SecretariaSlots.generate(fromDate.plusDays(offset.toLong()), own) }
+            val limit = d[DoctorsTable.maxPerDay]
+            val free = (0 until days).map { offset -> fromDate.plusDays(offset.toLong()) }
+                .filter { day -> limit == null || (perDay[id to day] ?: 0) < limit } // dia lotado: nenhum horário livre
+                .flatMap { day -> SecretariaSlots.generate(day, own) }
                 .filter { local -> local.toEpochMs(clinic.zone).let { ms -> ms >= earliest && (id to ms) !in taken } }
             DoctorAvailability(id, d[DoctorsTable.name], d[SpecialtiesTable.name], own, free)
         }
@@ -267,6 +273,19 @@ class SecretariaAppointmentService(
             .where { (AppointmentsTable.doctorId eq doctorId) and (AppointmentsTable.startsAt eq startsAt) and AppointmentsTable.activeSlot.isNotNull() }
             .any()
         if (busy) return BookResult.Fail("Esse horário acabou de ser ocupado.")
+
+        doctor[DoctorsTable.maxPerDay]?.let { limit ->
+            val dayStart = startLocal.toLocalDate().atStartOfDay().toEpochMs(clinic.zone)
+            val dayEnd = startLocal.toLocalDate().plusDays(1).atStartOfDay().toEpochMs(clinic.zone)
+            val booked = AppointmentsTable.selectAll()
+                .where {
+                    (AppointmentsTable.doctorId eq doctorId) and AppointmentsTable.activeSlot.isNotNull() and
+                        (AppointmentsTable.startsAt greaterEq dayStart) and (AppointmentsTable.startsAt less dayEnd)
+                }
+                // remarcar no mesmo dia não conta a consulta que está saindo
+                .count { it[AppointmentsTable.id] != rescheduledFromId }
+            if (booked >= limit) return BookResult.Fail("A agenda desse médico já está completa nesse dia ($limit consultas). Ofereça outro dia.")
+        }
 
         val id = try {
             AppointmentsTable.insert {

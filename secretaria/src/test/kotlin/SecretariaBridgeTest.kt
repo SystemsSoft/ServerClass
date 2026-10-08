@@ -353,6 +353,9 @@ class SecretariaBridgeTest {
             assertTrue(frames.any { it.contains("inlineData") }, "áudio da IA chegou ao PWA")
             assertTrue(frames.any { it.contains("Olá! Sou a SecretárIA.") })
             assertTrue(frames.none { it.contains("toolCall") }, "chamadas de função não vazam para o cliente")
+            // a IA chamou funções da agenda: o app recebe o aviso para tocar o sinal de espera
+            assertTrue(frames.any { it == """{"type":"working"}""" }, "o app é avisado de que a IA está verificando")
+            assertTrue(frames.indexOfFirst { it.contains("\"working\"") } < frames.indexOfFirst { it.contains("\"appointment\"") })
             val ui = Json.parseToJsonElement(frames.first { it.contains("\"appointment\"") }).jsonObject
             assertEquals("booked", ui["action"]!!.jsonPrimitive.content)
             assertFalse(ui.toString().contains("5521987654321"))

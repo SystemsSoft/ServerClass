@@ -268,10 +268,25 @@ data class UpdateTeamMemberRequest(val role: String)
 data class SpecialtyDto(val id: Long, val name: String)
 
 @Serializable
-data class DoctorDetailDto(val id: Long, val name: String, val specialty: String, val crm: String?, val active: Boolean)
+data class DoctorDetailDto(
+    val id: Long,
+    val name: String,
+    val specialty: String,
+    val crm: String?,
+    val active: Boolean,
+    /** Máximo de consultas por dia; null = sem limite. */
+    @EncodeDefault val maxPerDay: Int? = null,
+)
 
 @Serializable
-data class DoctorUpsertRequest(val name: String, val specialty: String, val crm: String? = null, val active: Boolean? = null)
+data class DoctorUpsertRequest(
+    val name: String,
+    val specialty: String,
+    val crm: String? = null,
+    val active: Boolean? = null,
+    /** Consultas por dia: 1 a 200 = limite; 0 = tirar o limite; ausente = manter como está. */
+    val maxPerDay: Int? = null,
+)
 
 /** weekday: 0 = domingo ... 6 = sábado; start/end no formato "HH:mm", horário local da clínica. */
 @Serializable

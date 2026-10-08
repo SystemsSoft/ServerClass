@@ -207,6 +207,45 @@ class SecretariaManagementServicesTest {
     }
 
     @Test
+    fun `limite de consultas por dia - dia lotado some dos horarios e recusa marcar alem dele`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val clinic = fx.clinic(fx.bootstrap().clinicId)
+        val d = fx.catalog.createDoctor(clinic.id, DoctorUpsertRequest("Dra. Paula Reis", "Pediatria", maxPerDay = 2)).ok()
+        assertEquals(2, d.maxPerDay)
+        fun tuesday() = runBlocking { fx.appointments.availableSlots(clinic, d.id, null, monday, 3, 100).map { it.startLocal }.filter { it.startsWith("2026-10-06") } }
+        assertTrue(tuesday().isNotEmpty())
+
+        val ana = fx.clinics.findOrCreatePatient(clinic.id, "Ana Souza", "5521987654321")
+        val bia = fx.clinics.findOrCreatePatient(clinic.id, "Bia Lima", "5521987654322")
+        val caio = fx.clinics.findOrCreatePatient(clinic.id, "Caio Reis", "5521987654323")
+        val first = fx.appointments.book(clinic, d.id, ana, local("2026-10-06T09:00"), AppointmentCreator.IA) as BookResult.Ok
+        assertTrue(tuesday().isNotEmpty(), "1 de 2: ainda há vaga")
+        fx.appointments.book(clinic, d.id, bia, local("2026-10-06T14:00"), AppointmentCreator.IA) as BookResult.Ok
+
+        // dia lotado: terça some dos horários livres (a IA não oferece), quarta continua
+        assertTrue(tuesday().isEmpty())
+        assertTrue(fx.appointments.availableSlots(clinic, d.id, null, monday, 3, 100).any { it.startLocal.startsWith("2026-10-07") })
+        val refused = fx.appointments.book(clinic, d.id, caio, local("2026-10-06T10:00"), AppointmentCreator.USUARIO) as BookResult.Fail
+        assertTrue(refused.reason.contains("completa nesse dia"))
+        // remarcar dentro do mesmo dia lotado é permitido (a consulta que sai não conta)
+        assertTrue(fx.appointments.reschedule(clinic, first.appointment.id, local("2026-10-06T10:00"), null, AppointmentCreator.IA) is BookResult.Ok)
+
+        // cancelar libera o dia
+        fx.appointments.cancel(clinic.id, fx.appointments.forPatient(clinic, bia).first().id, null)
+        assertTrue(tuesday().isNotEmpty())
+
+        // editar sem mandar o limite mantém; 0 tira; fora da faixa é recusado
+        assertEquals(2, fx.catalog.updateDoctor(clinic.id, d.id, DoctorUpsertRequest("Dra. Paula Reis", "Pediatria")).ok().maxPerDay)
+        fx.catalog.updateDoctor(clinic.id, d.id, DoctorUpsertRequest("Dra. Paula Reis", "Pediatria", maxPerDay = 201)).err(ErrorKind.INVALID)
+        fx.catalog.updateDoctor(clinic.id, d.id, DoctorUpsertRequest("Dra. Paula Reis", "Pediatria", maxPerDay = -1)).err(ErrorKind.INVALID)
+        assertEquals(1, fx.catalog.updateDoctor(clinic.id, d.id, DoctorUpsertRequest("Dra. Paula Reis", "Pediatria", maxPerDay = 1)).ok().maxPerDay)
+        assertTrue(tuesday().isEmpty(), "limite baixou para 1 e a terça já tem 1")
+        assertNull(fx.catalog.updateDoctor(clinic.id, d.id, DoctorUpsertRequest("Dra. Paula Reis", "Pediatria", maxPerDay = 0)).ok().maxPerDay)
+        assertTrue(tuesday().isNotEmpty(), "sem limite, só a agenda manda")
+        assertNull(fx.catalog.createDoctor(clinic.id, DoctorUpsertRequest("Dr. Sem Limite", "Pediatria")).ok().maxPerDay)
+    }
+
+    @Test
     fun `agenda semanal - validacao e efeito nos horarios livres`() = runBlocking<Unit> {
         val fx = SecretariaFixture()
         val clinic = fx.clinic(fx.bootstrap().clinicId)

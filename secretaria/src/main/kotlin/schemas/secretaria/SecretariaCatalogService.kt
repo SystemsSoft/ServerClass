@@ -37,6 +37,7 @@ class SecretariaCatalogService(
                 it[DoctorsTable.specialtyId] = specialtyId
                 it[name] = request.name.trim()
                 it[crm] = request.crm?.trim()?.ifEmpty { null }
+                it[maxPerDay] = request.maxPerDay?.takeIf { v -> v > 0 }
             }[DoctorsTable.id]
             writeSchedule(id, DEFAULT_WINDOWS) // sem agenda a IA não teria horários para oferecer
             ServiceResult.Ok(loadDoctor(clinicId, id)!!)
@@ -58,6 +59,7 @@ class SecretariaCatalogService(
                 it[DoctorsTable.specialtyId] = specialtyId
                 it[crm] = request.crm?.trim()?.ifEmpty { null }
                 request.active?.let { v -> it[active] = v }
+                request.maxPerDay?.let { v -> it[maxPerDay] = v.takeIf { n -> n > 0 } }
             }
             ServiceResult.Ok(loadDoctor(clinicId, doctorId)!!)
         }
@@ -93,6 +95,7 @@ class SecretariaCatalogService(
         request.name.trim().length !in 3..120 -> invalid("Nome do médico inválido (3 a 120 caracteres).")
         request.specialty.trim().length !in 2..80 -> invalid("Especialidade inválida (2 a 80 caracteres).")
         (request.crm?.trim()?.length ?: 0) > 20 -> invalid("CRM deve ter no máximo 20 caracteres.")
+        request.maxPerDay != null && request.maxPerDay !in 0..MAX_PER_DAY -> invalid("O limite de consultas por dia deve ficar entre 1 e $MAX_PER_DAY (ou vazio para sem limite).")
         else -> null
     }
 
@@ -161,9 +164,11 @@ class SecretariaCatalogService(
 
     private fun ResultRow.toDetail() = DoctorDetailDto(
         this[DoctorsTable.id], this[DoctorsTable.name], this[SpecialtiesTable.name], this[DoctorsTable.crm], this[DoctorsTable.active],
+        this[DoctorsTable.maxPerDay],
     )
 
     private companion object {
+        const val MAX_PER_DAY = 200
         val COMMON_SPECIALTIES = listOf(
             "Clínica geral", "Cardiologia", "Dermatologia", "Endocrinologia", "Fisioterapia", "Ginecologia", "Neurologia",
             "Nutrição", "Odontologia", "Oftalmologia", "Ortopedia", "Otorrinolaringologia", "Pediatria", "Psicologia",
