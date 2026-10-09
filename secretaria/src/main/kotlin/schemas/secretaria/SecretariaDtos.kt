@@ -146,6 +146,20 @@ data class PlanUsageDto(
     val costPerMinute: Double,
     val estimatedCost: Double,
     val nextBillingDate: String,
+    /** Pacotes contratados (minutos e preço já vêm multiplicados por isso). */
+    @EncodeDefault val units: Int = 1,
+    /** Quantidade que passa a valer na renovação (redução pedida no meio do ciclo); null = sem mudança agendada. */
+    @EncodeDefault val scheduledUnits: Int? = null,
+    /** Assinatura paga pela Stripe (a clínica gerencia a quantidade e o cartão pelo painel). */
+    @EncodeDefault val stripe: Boolean = false,
+    /** ativa | inadimplente | cancelada */
+    @EncodeDefault val status: String = "ativa",
+    /** Ligações bloqueadas: os minutos acabaram ou a assinatura não está ativa. */
+    @EncodeDefault val blocked: Boolean = false,
+    /** A contratação de pacotes (Stripe) está disponível neste servidor: o painel mostra "Ativar plano". */
+    @EncodeDefault val billingEnabled: Boolean = false,
+    /** Teste grátis (clínica nova): minutos únicos, sem cobrança nem renovação. */
+    @EncodeDefault val trial: Boolean = false,
 )
 
 @Serializable
@@ -190,6 +204,8 @@ data class RegisterClinicRequest(
     val userName: String,
     val email: String,
     val password: String,
+    /** Código do afiliado do link de indicação (`?ref=`); código desconhecido é ignorado. */
+    val affiliateCode: String? = null,
 )
 
 @Serializable
@@ -359,7 +375,31 @@ data class PlanDetailDto(
     val periodStart: String,
     val usageByDay: List<DayUsageDto>,
     val availablePlans: List<PlanDto>,
+    @EncodeDefault val billing: BillingInfoDto = BillingInfoDto(),
 )
+
+/** Contratação por pacotes (Stripe): o que o painel mostra para escolher a quantidade. */
+@Serializable
+data class BillingInfoDto(
+    /** false = a Stripe não está configurada no servidor (o painel esconde a contratação). */
+    @EncodeDefault val enabled: Boolean = false,
+    @EncodeDefault val unitMinutes: Int = 200,
+    @EncodeDefault val unitPrice: Double = 49.90,
+    @EncodeDefault val maxUnits: Int = 50,
+)
+
+@Serializable
+data class BillingUnitsRequest(val units: Int, val returnUrl: String? = null)
+
+@Serializable
+data class BillingReturnRequest(val returnUrl: String? = null)
+
+/** Endereço da Stripe para onde o painel leva a clínica (pagamento ou portal do cliente). */
+@Serializable
+data class BillingRedirectDto(val url: String)
+
+@Serializable
+data class BillingChangeDto(val units: Int, val scheduledUnits: Int?, val message: String)
 
 @Serializable
 data class CreatePlanRequest(val name: String, val monthlyPrice: Double, val includedMinutes: Int, val costPerMinute: Double)
@@ -483,3 +523,55 @@ data class UsageSummaryDto(
 /** Foto do paciente para o painel, como data URL ("data:image/jpeg;base64,..."). */
 @Serializable
 data class PhotoDto(val photo: String)
+
+// ── afiliados (página de gestão do dono do sistema) ──────────────────────────
+
+@Serializable
+data class AffiliateRequest(
+    val name: String,
+    val email: String? = null,
+    val phone: String? = null,
+    /** Código do link (A–Z, 0–9 e hífen, 3 a 32). Vazio na criação = gerado a partir do nome. */
+    val code: String? = null,
+    val active: Boolean? = null,
+)
+
+@Serializable
+data class AffiliateDto(
+    val id: Long,
+    val code: String,
+    val name: String,
+    val email: String?,
+    val phone: String?,
+    val active: Boolean,
+    val createdAt: Long,
+    /** Link de indicação pronto (null se secretaria.dashboardUrl não estiver configurado). */
+    val link: String?,
+    val clinics: Int,
+    /** Clínicas com plano recorrente ativo (assinatura da Stripe). */
+    val payingClinics: Int,
+    /** Soma das mensalidades das clínicas pagantes (R$). */
+    val monthlyRevenue: Double,
+)
+
+@Serializable
+data class AffiliateClinicDto(
+    val clinicId: Long,
+    val name: String,
+    val responsibleName: String?,
+    val email: String?,
+    val createdAt: Long,
+    val planName: String?,
+    /** Plano recorrente (Stripe) ativo. */
+    val recurring: Boolean,
+    val trial: Boolean,
+    val units: Int,
+    val includedMinutes: Int,
+    val monthlyPrice: Double,
+    /** ativa | inadimplente | cancelada | sem plano */
+    val status: String,
+    val nextBillingDate: String?,
+)
+
+@Serializable
+data class AffiliatesPageDto(val affiliates: List<AffiliateDto>, val linkBase: String?)

@@ -5,6 +5,8 @@ enum class ErrorKind(val httpStatus: Int) {
     FORBIDDEN(403),
     NOT_FOUND(404),
     CONFLICT(409),
+    /** Recurso não configurado no servidor (ex.: pagamento sem a chave da Stripe). */
+    UNAVAILABLE(503),
 }
 
 /** Resultado de uma operação de serviço; as rotas traduzem [Err] para o status HTTP de [ErrorKind]. */

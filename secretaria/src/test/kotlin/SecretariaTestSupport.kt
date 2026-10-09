@@ -27,6 +27,11 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import org.koin.dsl.module
 import org.koin.ktor.plugin.Koin
 import routes.secretaria.configureSecretaria
+import schemas.secretaria.SecretariaAffiliateService
+import schemas.secretaria.SecretariaBillingService
+import services.secretaria.StripeConfig
+import services.secretaria.StripeGateway
+import services.secretaria.StripeSubscription
 import services.secretaria.GeminiKey
 import services.secretaria.SecretariaCallHandler
 import services.secretaria.SecretariaLiveBridge
@@ -57,7 +62,11 @@ class SecretariaFixture(
     val team = SecretariaTeamService(db, clock)
     val catalog = SecretariaCatalogService(db, clock)
     val patients = SecretariaPatientService(db, appointments, clock)
-    val plans = SecretariaPlanService(db, clinics, clock)
+    val stripe = FakeStripe()
+    val stripeConfig = StripeConfig(apiKey = "sk_test_x", webhookSecret = "whsec_teste", priceId = "price_pacote", dashboardUrl = "https://painel.test")
+    val billing = SecretariaBillingService(db, clinics, stripe, stripeConfig, clock)
+    val affiliates = SecretariaAffiliateService(db, clock, linkBase = "https://painel.test")
+    val plans = SecretariaPlanService(db, clinics, clock, billing = { billing.info() })
     val reports = SecretariaReportService(db)
     val profiles = SecretariaProfileService(db, clock)
     val dashboard = SecretariaDashboardService(clinics, calls, appointments, settings, clock)
@@ -102,9 +111,53 @@ fun ApplicationTestBuilder.startSecretaria(fx: SecretariaFixture, config: Secret
             modules(module {
                 single { fx.auth }; single { fx.clinics }; single { fx.calls }; single { fx.appointments }; single { fx.dashboard }
                 single { fx.registry }; single { handler }; single { fx.settings }; single { fx.team }; single { fx.catalog }
-                single { fx.patients }; single { fx.plans }; single { fx.reports }; single { fx.profiles }
+                single { fx.patients }; single { fx.plans }; single { fx.reports }; single { fx.profiles }; single { fx.billing }
+                single { fx.affiliates }
             })
         }
         configureSecretaria()
     }
+}
+
+/**
+ * Stripe falsa: guarda as assinaturas em memória. [completeCheckout] faz o papel da clínica pagando na página da
+ * Stripe; [failNextCharge] simula um cartão recusado no próximo aumento.
+ */
+class FakeStripe : StripeGateway {
+    val checkouts = mutableListOf<Map<String, Any?>>()
+    val subscriptions = mutableMapOf<String, StripeSubscription>()
+    val quantityCalls = mutableListOf<Pair<Int, Boolean>>()
+    var failNextCharge = false
+    private var seq = 0
+
+    override suspend fun createCheckout(clinicId: Long, email: String, units: Int, successUrl: String, cancelUrl: String, customerId: String?): String {
+        checkouts += mapOf("clinicId" to clinicId, "email" to email, "units" to units, "success" to successUrl, "cancel" to cancelUrl, "customer" to customerId)
+        return "https://checkout.stripe.test/c/${checkouts.size}"
+    }
+
+    /** A clínica pagou: cria a assinatura (como a Stripe faria) e devolve o id. */
+    fun completeCheckout(clinicId: Long, units: Int, periodStart: Long, periodEnd: Long, customerId: String = "cus_${clinicId}"): String {
+        val id = "sub_${++seq}"
+        subscriptions[id] = StripeSubscription(id, customerId, "active", "si_$seq", units, periodStart, periodEnd, clinicId)
+        return id
+    }
+
+    override suspend fun subscription(id: String) = subscriptions[id] ?: throw services.secretaria.StripeException("No such subscription: $id")
+
+    override suspend fun setQuantity(subscriptionId: String, itemId: String, units: Int, chargeNow: Boolean) {
+        quantityCalls += units to chargeNow
+        if (chargeNow && failNextCharge) { failNextCharge = false; return } // pending_if_incomplete: não muda
+        subscriptions[subscriptionId] = subscriptions.getValue(subscriptionId).copy(quantity = units)
+    }
+
+    override suspend fun portal(customerId: String, returnUrl: String) = "https://billing.stripe.test/p/$customerId"
+
+    fun update(id: String, change: (StripeSubscription) -> StripeSubscription) { subscriptions[id] = change(subscriptions.getValue(id)) }
+}
+
+/** Aviso da Stripe assinado como a Stripe assina (HMAC-SHA256 de "t.corpo"). */
+fun signedStripeEvent(secret: String, payload: String, nowSeconds: Long): String {
+    val mac = javax.crypto.Mac.getInstance("HmacSHA256").apply { init(javax.crypto.spec.SecretKeySpec(secret.toByteArray(), "HmacSHA256")) }
+    val signature = mac.doFinal("$nowSeconds.$payload".toByteArray()).joinToString("") { "%02x".format(it) }
+    return "t=$nowSeconds,v1=$signature"
 }

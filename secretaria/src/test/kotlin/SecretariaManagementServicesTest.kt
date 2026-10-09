@@ -477,7 +477,7 @@ class SecretariaManagementServicesTest {
         fx.calls.start(clinic.id, CallChannel.PWA, null).also { fx.advanceSeconds(30); fx.calls.end(it.id) }
 
         val d = fx.plans.detail(clinic).ok()
-        assertEquals(300, d.usage.includedMinutes); assertEquals("ativa", d.status)
+        assertEquals(10, d.usage.includedMinutes); assertEquals("ativa", d.status)
         assertEquals(listOf("2026-10-05", "2026-10-06"), d.usageByDay.map { it.date })
         assertEquals(listOf(1, 2), d.usageByDay.map { it.calls })
         assertEquals(listOf(2.5, 2.0), d.usageByDay.map { it.minutes })

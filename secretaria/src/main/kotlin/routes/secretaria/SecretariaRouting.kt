@@ -27,6 +27,8 @@ import schemas.secretaria.SecretariaCatalogService
 import schemas.secretaria.SecretariaClinicService
 import schemas.secretaria.SecretariaDashboardService
 import schemas.secretaria.SecretariaPatientService
+import schemas.secretaria.SecretariaAffiliateService
+import schemas.secretaria.SecretariaBillingService
 import schemas.secretaria.SecretariaPlanService
 import schemas.secretaria.SecretariaProfileService
 import schemas.secretaria.SaveProfileRequest
@@ -59,6 +61,8 @@ internal class SecretariaApi(
     val plans: SecretariaPlanService,
     val reports: SecretariaReportService,
     val profiles: SecretariaProfileService,
+    val billing: SecretariaBillingService,
+    val affiliates: SecretariaAffiliateService,
 ) {
     val throttle = LoginThrottle()
 }
@@ -68,14 +72,17 @@ fun Application.configureSecretaria() {
     // Resolvidos já na partida (não na primeira requisição): se o banco da SecretárIA não abrir, o erro aparece
     // aqui — e o Application.kt desliga só este módulo, sem derrubar os demais produtos do servidor.
     val api = SecretariaApi(
-        get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+        get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
     )
     val allowedOrigins = config("secretaria.allowedOrigins", "SECRETARIA_ALLOWED_ORIGINS")
         ?.split(',')?.map { it.trim().trimEnd('/') }?.filter { it.isNotEmpty() }.orEmpty()
 
     routing {
         publicRoutes(api, allowedOrigins)
+        stripeWebhookRoute(api)
         route("/secretaria") {
+            billingRoutes(api)
+            affiliateRoutes(api)
             managementRoutes(api)
             operationRoutes(api)
             reportRoutes(api)

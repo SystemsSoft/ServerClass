@@ -14,6 +14,8 @@ class SecretariaPlanService(
     private val database: Database,
     private val clinics: SecretariaClinicService,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Contratação por pacotes (Stripe) que o painel mostra junto do plano. */
+    private val billing: () -> BillingInfoDto = { BillingInfoDto() },
 ) {
 
     suspend fun detail(clinic: ClinicInfo): ServiceResult<PlanDetailDto> {
@@ -23,7 +25,7 @@ class SecretariaPlanService(
             val days = CallsTable.selectAll()
                 .where {
                     (CallsTable.clinicId eq clinic.id) and (CallsTable.state eq CallState.ENCERRADA) and
-                        (CallsTable.startedAt greaterEq sub[SubscriptionsTable.periodStart]) and (CallsTable.startedAt less sub[SubscriptionsTable.nextBillingAt])
+                        (CallsTable.startedAt greaterEq sub[SubscriptionsTable.periodStart])
                 }
                 .groupBy { it[CallsTable.startedAt].toLocalDateTime(clinic.zone).toLocalDate() }
                 .toSortedMap()
@@ -33,7 +35,8 @@ class SecretariaPlanService(
                 }
             Triple(sub[SubscriptionsTable.status].name.lowercase(), Instant.ofEpochMilli(sub[SubscriptionsTable.periodStart]).atZone(clinic.zone).toLocalDate().toString(), days)
         }
-        return ServiceResult.Ok(PlanDetailDto(usage, status, periodStart, byDay, plans()))
+        val billing = billing()
+        return ServiceResult.Ok(PlanDetailDto(usage.copy(billingEnabled = billing.enabled), status, periodStart, byDay, plans(), billing))
     }
 
     suspend fun plans(): List<PlanDto> = database.dbQuery {

@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
+import schemas.secretaria.CallBlock
 import schemas.secretaria.CallChannel
 import schemas.secretaria.ClinicInfo
 import schemas.secretaria.NotificationType
@@ -58,6 +59,18 @@ class SecretariaCallHandler(
             return
         }
 
+        // plano: sem minutos ou com a assinatura parada, a SecretárIA não atende (o paciente ouve que está indisponível)
+        val allowance = clinics.callAllowance(clinic.id)
+        if (allowance.block != null) {
+            if (allowance.block == CallBlock.NO_MINUTES) runCatching { clinics.noticeMinutesExhausted(clinic.id) }
+            log.info("Clínica {}: ligação recusada ({})", clinic.id, allowance.block)
+            session.send(Frame.Text(buildJsonObject {
+                put("type", "error"); put("code", "unavailable"); put("message", "O atendimento por IA está temporariamente indisponível.")
+            }.toString()))
+            session.close(CloseReason(CloseReason.Codes.NORMAL, "unavailable"))
+            return
+        }
+
         val caller = identifyCaller(session, clinic)
         val started = calls.start(clinic.id, CallChannel.PWA, model)
         // paciente do app: a ligação já nasce com ele (o painel mostra foto e dados desde o começo)
@@ -73,12 +86,14 @@ class SecretariaCallHandler(
                 .onFailure { log.warn("Chamada {}: não li os médicos para a persona ({}); a IA vai consultar a função", started.id, it.message) }
                 .getOrNull()
             val instruction = SecretariaPersona.systemInstruction(clinic.name, clinic.responsibleName, now, config.extraInstructions, doctors, caller)
-            bridge.run(session, ctx, instruction, config.voice)
+            bridge.run(session, ctx, instruction, config.voice, maxCallMillis = allowance.remainingSeconds?.times(1000))
         } finally {
             withContext(NonCancellable) {
                 registry.unregister(started.id)
                 runCatching { calls.end(started.id) }.onFailure { log.error("Falha ao encerrar chamada {}: {}", started.id, it.message) }
                 runCatching { clinics.notify(clinic.id, NotificationType.CHAMADA, "Chamada encerrada", "Atendimento #${started.id} finalizado pela SecretárIA.") }
+                // esta ligação gastou o que restava: avisa a clínica já agora, não só na próxima tentativa
+                runCatching { if (clinics.callAllowance(clinic.id).block == CallBlock.NO_MINUTES) clinics.noticeMinutesExhausted(clinic.id) }
             }
             log.info("Chamada {} finalizada", started.id)
         }

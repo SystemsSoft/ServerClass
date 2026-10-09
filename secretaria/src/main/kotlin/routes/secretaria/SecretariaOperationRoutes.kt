@@ -36,7 +36,7 @@ internal fun Route.operationRoutes(api: SecretariaApi) {
         val access = call.requireClinic(api) ?: return@get
         val data = api.dashboard.build(access.summary, access.user.id, access.user.name)
             ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("Clínica não encontrada"))
-        call.respond(data)
+        call.respond(data.copy(plan = data.plan?.copy(billingEnabled = api.billing.enabled)))
     }
 
     // ── Chamadas ─────────────────────────────────────────────────────────────

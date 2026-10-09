@@ -45,9 +45,9 @@ class SecretariaServicesTest {
 
         val plan = fx.clinics.planUsage(boot.clinicId, clinic.zone)
         assertNotNull(plan)
-        assertEquals(300, plan.includedMinutes)
+        assertEquals(10, plan.includedMinutes) // clínica nova: teste grátis
+        assertEquals("Teste grátis", plan.planName); assertTrue(plan.trial); assertEquals(0.0, plan.monthlyPrice)
         assertEquals(0, plan.usedMinutes)
-        assertEquals(199.0, plan.monthlyPrice)
     }
 
     @Test
@@ -281,7 +281,7 @@ class SecretariaServicesTest {
         assertEquals(5, plan.usedMinutes)
         assertEquals(0.12, plan.costPerMinute)
         assertEquals(0.6, plan.estimatedCost)
-        assertEquals(5.0 / 300, plan.usageRatio, 1e-9)
+        assertEquals(5.0 / 10, plan.usageRatio, 1e-9)
 
         fx.clinics.markNotificationsRead(clinic.id, boot.userId)
         assertEquals(0, fx.clinics.unreadNotifications(clinic.id, boot.userId))
@@ -291,8 +291,10 @@ class SecretariaServicesTest {
     fun `estimativa antiga de R$ 0,50 por minuto do plano padrao vira R$ 0,12 ao subir o servidor`() = runBlocking<Unit> {
         val fx = SecretariaFixture()
         val clinic = fx.clinic(fx.bootstrap().clinicId)
-        // simula o banco de produção, com o valor antigo
-        transaction(fx.db) { PlansTable.update { it[costPerMinute] = java.math.BigDecimal("0.5000") } }
+        // simula uma clínica antiga de produção: no "Plano Clínica" de 300 minutos, com o valor antigo
+        val old = (fx.plans.createPlan(schemas.secretaria.CreatePlanRequest("Plano Clínica", 199.0, 300, 0.5)) as schemas.secretaria.ServiceResult.Ok).value
+        fx.plans.assign(clinic.id, old.id)
+        assertEquals(0.5, fx.clinics.planUsage(clinic.id, clinic.zone)!!.costPerMinute)
         SecretariaSchema.create(fx.db)
         assertEquals(0.12, fx.clinics.planUsage(clinic.id, clinic.zone)!!.costPerMinute)
 

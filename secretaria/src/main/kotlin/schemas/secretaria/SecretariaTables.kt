@@ -41,6 +41,19 @@ enum class AppointmentStatus {
     val occupiesSlot: Boolean get() = this != CANCELADO && this != REMARCADO
 }
 
+/** Afiliados: quem indica clínicas. O link de indicação leva o [code] (`?ref=CODE`). */
+object AffiliatesTable : Table("affiliates") {
+    val id = long("id").autoIncrement()
+    val code = varchar("code", 32).uniqueIndex()
+    val name = varchar("name", 120)
+    val email = varchar("email", 160).nullable()
+    val phone = varchar("phone", 20).nullable()
+    val active = bool("active").default(true)
+    val createdAt = long("created_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
+
 object ClinicsTable : Table("clinics") {
     val id = long("id").autoIncrement()
     val name = varchar("name", 120)
@@ -53,6 +66,8 @@ object ClinicsTable : Table("clinics") {
 
     /** Chave pública embutida no PWA do paciente: identifica a clínica na chamada, sem login. */
     val publicKey = varchar("public_key", 64).uniqueIndex()
+    /** Afiliado que indicou a clínica (cadastro feito pelo link dele); null = cadastro direto. */
+    val affiliateId = long("affiliate_id").nullable().index()
     val active = bool("active").default(true)
     val createdAt = long("created_at")
 
@@ -288,6 +303,14 @@ object SubscriptionsTable : Table("clinic_subscriptions") {
     val status = enumerationByName("status", 20, SubscriptionStatus::class)
     val periodStart = long("period_start")
     val nextBillingAt = long("next_billing_at")
+    /** Pacotes contratados: os minutos e o preço do plano são multiplicados por isso (assinatura da Stripe). */
+    val units = integer("units").default(1)
+    /** Redução pedida no meio do ciclo: só passa a valer na renovação (até lá, os minutos contratados continuam). */
+    val scheduledUnits = integer("scheduled_units").nullable()
+    val stripeCustomerId = varchar("stripe_customer_id", 64).nullable()
+    val stripeSubscriptionId = varchar("stripe_subscription_id", 64).nullable().index()
+    /** Início do ciclo em que a clínica já foi avisada de que os minutos acabaram (avisa uma vez por ciclo). */
+    val exhaustedNoticeFor = long("exhausted_notice_for").nullable()
 
     override val primaryKey = PrimaryKey(id)
 }
@@ -316,7 +339,7 @@ object SecretariaSchema {
     fun create(database: Database) {
         transaction(database) {
             SchemaUtils.createMissingTablesAndColumns(
-                ClinicsTable, ClinicSettingsTable, UsersTable, ClinicUsersTable, SpecialtiesTable, DoctorsTable,
+                AffiliatesTable, ClinicsTable, ClinicSettingsTable, UsersTable, ClinicUsersTable, SpecialtiesTable, DoctorsTable,
                 DoctorSchedulesTable, PatientProfilesTable, PatientsTable, CallsTable, CallMessagesTable,
                 AppointmentsTable, PlansTable, SubscriptionsTable, NotificationsTable,
                 withLogs = false, // o aviso de "índices extras" do Exposed é só ruído: as FKs já criam seus índices

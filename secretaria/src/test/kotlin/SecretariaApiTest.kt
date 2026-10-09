@@ -482,7 +482,7 @@ class SecretariaApiTest {
             val admin = token("maria@clinica.test")
 
             val detail = json(req(HttpMethod.Get, "/secretaria/plan?$q", admin).bodyAsText()).jsonObject
-            assertEquals(300, detail["usage"]!!.jsonObject["includedMinutes"]!!.jsonPrimitive.content.toInt())
+            assertEquals(10, detail["usage"]!!.jsonObject["includedMinutes"]!!.jsonPrimitive.content.toInt())
             assertEquals(1, detail["availablePlans"]!!.jsonArray.size)
 
             val plan = """{"name":"Plano Pro","monthlyPrice":499.0,"includedMinutes":1000,"costPerMinute":0.4}"""

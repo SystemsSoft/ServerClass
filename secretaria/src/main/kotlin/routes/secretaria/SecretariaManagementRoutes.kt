@@ -96,9 +96,11 @@ internal fun Route.managementRoutes(api: SecretariaApi) {
             return@post call.bad(newClinicError(REGISTER_MIN_PASSWORD))
         }
         try {
-            api.clinics.bootstrap(
+            val created = api.clinics.bootstrap(
                 BootstrapRequest(body.clinicName, body.responsibleName, body.timezone, body.userName, body.email, body.password),
             )
+            // veio pelo link de um afiliado: a clínica fica ligada a ele (código desconhecido é ignorado)
+            runCatching { api.affiliates.attach(created.clinicId, body.affiliateCode) }
         } catch (e: EmailAlreadyUsedException) {
             return@post call.respond(HttpStatusCode.Conflict, ErrorDto("E-mail já cadastrado"))
         } catch (e: java.time.DateTimeException) {
@@ -262,7 +264,7 @@ private fun isInvalidNewClinic(clinicName: String, userName: String, email: Stri
     clinicName.isBlank() || userName.isBlank() || !email.contains('@') || password.length < minPassword
 
 /** Exige `X-Admin-Key`. Sem chave configurada o recurso fica "inexistente" (404). */
-private suspend fun ApplicationCall.requireAdminKey(): Boolean {
+internal suspend fun ApplicationCall.requireAdminKey(): Boolean {
     val adminKey = config("secretaria.adminKey", "SECRETARIA_ADMIN_KEY")
     if (adminKey.isNullOrBlank()) {
         respond(HttpStatusCode.NotFound)

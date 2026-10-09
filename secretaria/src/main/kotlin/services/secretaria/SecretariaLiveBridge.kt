@@ -118,7 +118,15 @@ class SecretariaLiveBridge(
         @Synchronized fun total() = total
     }
 
-    suspend fun run(clientSession: DefaultWebSocketServerSession, ctx: SecretariaCallContext, instruction: String, voice: String? = null) {
+    /** [maxCallMillis]: limite desta ligação (o saldo de minutos do plano); nunca passa do limite configurado. */
+    suspend fun run(
+        clientSession: DefaultWebSocketServerSession,
+        ctx: SecretariaCallContext,
+        instruction: String,
+        voice: String? = null,
+        maxCallMillis: Long? = null,
+    ) {
+        val limitMillis = minOf(config.maxCallMillis, maxCallMillis ?: Long.MAX_VALUE)
         val keys = config.keys()
         if (keys.isEmpty()) {
             log.error("Nenhuma chave Gemini configurada (gemini.apiKey / GEMINI_API_KEY...)")
@@ -140,7 +148,7 @@ class SecretariaLiveBridge(
         try {
             var lastError: Throwable? = null
             for (entry in keys) {
-                when (val result = attempt(entry, clientSession, ctx, instruction, voice, buffer, meter)) {
+                when (val result = attempt(entry, clientSession, ctx, instruction, voice, buffer, meter, limitMillis)) {
                     Attempt.Finished -> return
                     is Attempt.NotEstablished -> {
                         lastError = result.error
@@ -173,6 +181,7 @@ class SecretariaLiveBridge(
         voice: String?,
         buffer: TranscriptBuffer,
         meter: UsageMeter,
+        limitMillis: Long,
     ): Attempt {
         var established = false
         try {
@@ -188,7 +197,7 @@ class SecretariaLiveBridge(
                     put("callId", ctx.callId)
                 }.toString()))
                 send(Frame.Text(GeminiLiveMessages.userText(SecretariaPersona.greeting(ctx.caller)).toString()))
-                relay(this, clientSession, ctx, buffer, meter)
+                relay(this, clientSession, ctx, buffer, meter, limitMillis)
             }
             return Attempt.Finished
         } catch (e: CancellationException) {
@@ -215,6 +224,7 @@ class SecretariaLiveBridge(
         ctx: SecretariaCallContext,
         buffer: TranscriptBuffer,
         meter: UsageMeter,
+        limitMillis: Long,
     ) = coroutineScope {
         val startedAt = System.currentTimeMillis()
         val lastClientAt = AtomicLong(startedAt)
@@ -258,7 +268,7 @@ class SecretariaLiveBridge(
             while (isActive) {
                 delay(config.watchdogIntervalMillis)
                 val now = System.currentTimeMillis()
-                if (now - startedAt >= config.maxCallMillis) {
+                if (now - startedAt >= limitMillis) {
                     runCatching { clientSession.sendControl("time_limit", "O tempo máximo da chamada foi atingido.") }
                     endedBy.compareAndSet(null, "time_limit")
                     return@launch

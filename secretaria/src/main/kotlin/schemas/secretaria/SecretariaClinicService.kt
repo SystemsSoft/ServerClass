@@ -4,6 +4,8 @@ import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
+import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
@@ -98,14 +100,16 @@ class SecretariaClinicService(
                 }
             }
 
-            val planId = PlansTable.selectAll().where { PlansTable.name eq DEFAULT_PLAN_NAME }.singleOrNull()
-                ?.get(PlansTable.id)
-                ?: PlansTable.insert {
-                    it[name] = DEFAULT_PLAN_NAME
-                    it[monthlyPrice] = BigDecimal("199.00")
-                    it[includedMinutes] = 300
-                    it[costPerMinute] = DEFAULT_COST_PER_MINUTE
-                }[PlansTable.id]
+            // clínica nova começa no teste grátis: gastos os minutos, só volta a atender ativando o plano (Stripe)
+            val trial = PlansTable.selectAll().where { PlansTable.name eq TRIAL_PLAN_NAME }.singleOrNull()
+            val planId = trial?.get(PlansTable.id)?.also { id ->
+                if (trial[PlansTable.includedMinutes] != trialMinutes) PlansTable.update({ PlansTable.id eq id }) { it[includedMinutes] = trialMinutes }
+            } ?: PlansTable.insert {
+                it[name] = TRIAL_PLAN_NAME
+                it[monthlyPrice] = BigDecimal("0.00")
+                it[includedMinutes] = trialMinutes
+                it[costPerMinute] = DEFAULT_COST_PER_MINUTE
+            }[PlansTable.id]
             SubscriptionsTable.insert {
                 it[SubscriptionsTable.clinicId] = clinicId
                 it[SubscriptionsTable.planId] = planId
@@ -237,33 +241,74 @@ class SecretariaClinicService(
 
     // ── plano ────────────────────────────────────────────────────────────────
 
-    /** Minutos do ciclo atual (arredondados para cima, como no esquema original) e custo estimado. */
+    /**
+     * Minutos do ciclo atual (arredondados para cima, como no esquema original) e custo estimado. O ciclo vai do
+     * início do período até a renovação (que a Stripe avisa); sem renovação, tudo desde o início conta — assim os
+     * minutos de uma assinatura não renovada não "voltam" sozinhos.
+     */
     suspend fun planUsage(clinicId: Long, zone: ZoneId): PlanUsageDto? = database.dbQuery {
         val row = (SubscriptionsTable innerJoin PlansTable).selectAll()
             .where { SubscriptionsTable.clinicId eq clinicId }.singleOrNull() ?: return@dbQuery null
 
-        val seconds = CallsTable.selectAll()
-            .where {
-                (CallsTable.clinicId eq clinicId) and (CallsTable.state eq CallState.ENCERRADA) and
-                    (CallsTable.startedAt greaterEq row[SubscriptionsTable.periodStart]) and
-                    (CallsTable.startedAt less row[SubscriptionsTable.nextBillingAt])
-            }
-            .sumOf { it[CallsTable.durationSeconds] ?: 0 }
+        val seconds = usedSeconds(clinicId, row[SubscriptionsTable.periodStart])
         val usedMinutes = Math.ceil(seconds / 60.0).toInt()
-        val included = row[PlansTable.includedMinutes]
+        val units = row[SubscriptionsTable.units]
+        val included = row[PlansTable.includedMinutes] * units
         val perMinute = row[PlansTable.costPerMinute]
+        val status = row[SubscriptionsTable.status]
 
         PlanUsageDto(
             planName = row[PlansTable.name],
-            monthlyPrice = row[PlansTable.monthlyPrice].toDouble(),
+            monthlyPrice = row[PlansTable.monthlyPrice].multiply(BigDecimal(units)).toDouble(),
             includedMinutes = included,
             usedMinutes = usedMinutes,
             usageRatio = if (included == 0) 0.0 else (usedMinutes.toDouble() / included).coerceAtMost(1.0),
             costPerMinute = perMinute.toDouble(),
             estimatedCost = perMinute.multiply(BigDecimal(usedMinutes)).setScale(2, java.math.RoundingMode.HALF_UP).toDouble(),
             nextBillingDate = Instant.ofEpochMilli(row[SubscriptionsTable.nextBillingAt]).atZone(zone).toLocalDate().toString(),
+            units = units,
+            scheduledUnits = row[SubscriptionsTable.scheduledUnits],
+            stripe = row[SubscriptionsTable.stripeSubscriptionId] != null,
+            status = status.name.lowercase(),
+            blocked = status != SubscriptionStatus.ATIVA || seconds >= included * 60L,
+            trial = row[SubscriptionsTable.stripeSubscriptionId] == null && row[PlansTable.name] == TRIAL_PLAN_NAME,
         )
     }
+
+    /**
+     * Pode atender? Bloqueia quando a assinatura não está ativa (pagamento recusado, cancelada) ou os minutos do ciclo
+     * acabaram. [CallAllowance.remainingSeconds] limita a duração da ligação ao saldo (null = clínica sem plano).
+     */
+    suspend fun callAllowance(clinicId: Long): CallAllowance = database.dbQuery {
+        val row = (SubscriptionsTable innerJoin PlansTable).selectAll()
+            .where { SubscriptionsTable.clinicId eq clinicId }.singleOrNull() ?: return@dbQuery CallAllowance(null, null)
+        if (row[SubscriptionsTable.status] != SubscriptionStatus.ATIVA) return@dbQuery CallAllowance(CallBlock.INACTIVE, 0)
+        val included = row[PlansTable.includedMinutes] * row[SubscriptionsTable.units] * 60L
+        val remaining = included - usedSeconds(clinicId, row[SubscriptionsTable.periodStart])
+        if (remaining <= 0) CallAllowance(CallBlock.NO_MINUTES, 0) else CallAllowance(null, remaining)
+    }
+
+    /** Avisa a clínica, uma vez por ciclo, de que os minutos acabaram. */
+    suspend fun noticeMinutesExhausted(clinicId: Long) {
+        val first = database.dbQuery {
+            val row = SubscriptionsTable.selectAll().where { SubscriptionsTable.clinicId eq clinicId }.singleOrNull() ?: return@dbQuery false
+            val cycle = row[SubscriptionsTable.periodStart]
+            if (row[SubscriptionsTable.exhaustedNoticeFor] == cycle) return@dbQuery false
+            SubscriptionsTable.update({ SubscriptionsTable.clinicId eq clinicId }) { it[exhaustedNoticeFor] = cycle }
+            true
+        }
+        if (first) {
+            notify(
+                clinicId, NotificationType.PLANO, "Os minutos acabaram",
+                "A SecretárIA parou de atender: os minutos deste ciclo acabaram. Aumente os pacotes em Plano › Ver detalhes.",
+            )
+        }
+    }
+
+    private fun Transaction.usedSeconds(clinicId: Long, since: Long): Long =
+        CallsTable.selectAll()
+            .where { (CallsTable.clinicId eq clinicId) and (CallsTable.state eq CallState.ENCERRADA) and (CallsTable.startedAt greaterEq since) }
+            .sumOf { (it[CallsTable.durationSeconds] ?: 0).toLong() }
 
     private fun ResultRow.toInfo() = ClinicInfo(
         id = this[ClinicsTable.id],
@@ -274,9 +319,24 @@ class SecretariaClinicService(
     )
 
     companion object {
+        /** Plano antigo de 300 minutos (clínicas criadas antes do teste grátis continuam nele). */
         const val DEFAULT_PLAN_NAME = "Plano Clínica"
+
+        /** Plano de toda clínica nova: alguns minutos grátis, sem renovação. */
+        const val TRIAL_PLAN_NAME = "Teste grátis"
+
+        /** Minutos do teste grátis (secretaria.trialMinutes / SECRETARIA_TRIAL_MINUTES). */
+        val trialMinutes: Int
+            get() = (System.getProperty("secretaria.trialMinutes") ?: System.getenv("SECRETARIA_TRIAL_MINUTES"))
+                ?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: 10
 
         /** Custo estimado por minuto de uso (R$), mostrado no painel. Medido na prática: ~R$ 0,09–0,10/min de IA. */
         val DEFAULT_COST_PER_MINUTE: BigDecimal = BigDecimal("0.1200")
     }
 }
+
+/** Por que a SecretárIA não pode atender: assinatura não ativa ou minutos do ciclo esgotados. */
+enum class CallBlock { INACTIVE, NO_MINUTES }
+
+/** [block] = null: pode atender; [remainingSeconds] = saldo de minutos do ciclo (null = clínica sem plano, sem limite). */
+data class CallAllowance(val block: CallBlock?, val remainingSeconds: Long?)

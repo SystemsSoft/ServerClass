@@ -42,6 +42,10 @@ import schemas.secretaria.SecretariaTokens
 import services.secretaria.SecretariaCallHandler
 import services.secretaria.SecretariaCallRegistry
 import services.secretaria.SecretariaLiveBridge
+import services.secretaria.HttpStripeGateway
+import services.secretaria.StripeConfig
+import schemas.secretaria.SecretariaBillingService
+import schemas.secretaria.SecretariaAffiliateService
 import services.secretaria.SecretariaLiveConfig
 import services.secretaria.SecretariaToolExecutor
 import java.io.File
@@ -120,7 +124,10 @@ fun secretariaModule(database: Database): Module = module {
     single { SecretariaTeamService(database) }
     single { SecretariaCatalogService(database) }
     single { SecretariaPatientService(database, get()) }
-    single { SecretariaPlanService(database, get()) }
+    single { StripeConfig.fromConfig() }
+    single { SecretariaAffiliateService(database) }
+    single { SecretariaBillingService(database, get(), get<StripeConfig>().takeIf { it.enabled }?.let { HttpStripeGateway(it) }, get()) }
+    single { SecretariaPlanService(database, get(), billing = { get<SecretariaBillingService>().info() }) }
     single { SecretariaReportService(database) }
     single { SecretariaProfileService(database) }
     single { SecretariaDashboardService(get(), get(), get(), get()) }
