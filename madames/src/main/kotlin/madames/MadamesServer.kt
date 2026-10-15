@@ -20,8 +20,10 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
 import routes.madamesFormosas.madamesEquipeRouting
+import routes.madamesFormosas.madamesImagensRouting
 import routes.madamesFormosas.madamesProdutosRouting
 import schemas.madamesFormosas.EquipeService
+import schemas.madamesFormosas.ImagemService
 import schemas.madamesFormosas.ProdutoService
 import java.io.File
 import java.sql.DriverManager
@@ -79,7 +81,9 @@ fun Application.madamesService(
     }
     val produtos = ProdutoService(database)
     madamesProdutosRouting(produtos)
-    madamesEquipeRouting(EquipeService(database, adminInicial), produtos)
+    val imagens = ImagemService(database)
+    madamesImagensRouting(imagens)
+    madamesEquipeRouting(EquipeService(database, adminInicial), produtos, imagens)
 }
 
 // ── banco ────────────────────────────────────────────────────────────────────

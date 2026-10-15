@@ -33,8 +33,17 @@ private suspend fun ApplicationCall.autorizarAdmin(): Boolean {
     return true
 }
 
-private fun Produto.validar(): String? = when {
+/** Mesmo formato de código para a API e para a gestão de produtos da equipe. */
+internal fun Produto.normalizado(): Produto = copy(
+    codigo = codigo.trim().uppercase(),
+    nome = nome.trim(),
+    categoria = categoria.trim(),
+    fotos = fotos.map { it.trim() }.filter { it.isNotEmpty() },
+)
+
+internal fun Produto.validar(): String? = when {
     codigo.isBlank() -> "Código obrigatório"
+    !Regex("[A-Za-z0-9_-]{1,32}").matches(codigo) -> "Código deve ter até 32 letras, números, hífen ou _"
     nome.isBlank() -> "Nome obrigatório"
     categoria.isBlank() -> "Categoria obrigatória"
     preco < 0 -> "Preço inválido"
@@ -75,7 +84,7 @@ fun Application.madamesProdutosRouting(produtoService: ProdutoService) {
             post {
                 if (!call.autorizarAdmin()) return@post
                 try {
-                    val produto = call.receive<Produto>()
+                    val produto = call.receive<Produto>().normalizado()
                     produto.validar()?.let { return@post call.respond(HttpStatusCode.BadRequest, it) }
 
                     if (produtoService.create(produto)) {
