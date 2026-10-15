@@ -19,7 +19,9 @@ import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
+import routes.madamesFormosas.madamesEquipeRouting
 import routes.madamesFormosas.madamesProdutosRouting
+import schemas.madamesFormosas.EquipeService
 import schemas.madamesFormosas.ProdutoService
 import java.io.File
 import java.sql.DriverManager
@@ -32,7 +34,8 @@ import java.util.Properties
  *   java -jar madames-0.0.1.jar        porta 8082 em 127.0.0.1 (madames.port / madames.host para mudar)
  *
  * Configuração em `madames-credentials.properties` na pasta de onde o processo roda (ou variáveis de ambiente):
- * o banco (db.host, db.user, db.password — sem valor padrão) e madames.adminToken.
+ * o banco (db.host, db.user, db.password — sem valor padrão), madames.adminToken e o primeiro login da equipe
+ * (madames.adminLogin / madames.adminPassword, usado só enquanto não existe ninguém cadastrado).
  * Para desenvolver sem MySQL: `-Dmadames.db.url=jdbc:h2:mem:madames;MODE=MySQL;DB_CLOSE_DELAY=-1`.
  */
 fun main() {
@@ -44,7 +47,10 @@ fun main() {
 }
 
 /** Tudo o que o serviço precisa: JSON, CORS e as rotas do catálogo. */
-fun Application.madamesService(database: Database = connectDatabase()) {
+fun Application.madamesService(
+    database: Database = connectDatabase(),
+    adminInicial: Pair<String, String>? = adminInicialDaConfig(),
+) {
     // mesmas regras de JSON do servidor principal
     install(ContentNegotiation) {
         json(Json {
@@ -71,7 +77,9 @@ fun Application.madamesService(database: Database = connectDatabase()) {
             call.respondText(if (dbOk) "ok" else "banco indisponível", ContentType.Text.Plain, if (dbOk) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable)
         }
     }
-    madamesProdutosRouting(ProdutoService(database))
+    val produtos = ProdutoService(database)
+    madamesProdutosRouting(produtos)
+    madamesEquipeRouting(EquipeService(database, adminInicial), produtos)
 }
 
 // ── banco ────────────────────────────────────────────────────────────────────
@@ -116,6 +124,12 @@ private fun connectMySql(): Database {
 // ── configuração ─────────────────────────────────────────────────────────────
 
 private fun config(property: String, env: String): String? = System.getProperty(property) ?: System.getenv(env)
+
+private fun adminInicialDaConfig(): Pair<String, String>? {
+    val login = config("madames.adminLogin", "MADAMES_ADMIN_LOGIN")?.takeIf { it.isNotBlank() } ?: return null
+    val senha = config("madames.adminPassword", "MADAMES_ADMIN_PASSWORD")?.takeIf { it.isNotBlank() } ?: return null
+    return login to senha
+}
 
 private fun required(property: String, env: String): String =
     config(property, env)?.takeIf { it.isNotBlank() }

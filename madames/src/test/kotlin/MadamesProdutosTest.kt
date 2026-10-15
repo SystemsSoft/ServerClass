@@ -29,7 +29,7 @@ class MadamesProdutosTest {
 
     @Test
     fun `primeira subida grava o catalogo inicial com fotos em ordem`() = testApplication {
-        application { madamesService(novoBanco()) }
+        application { madamesService(novoBanco(), adminInicial = null) }
 
         assertEquals("ok", client.get("/madames/health").bodyAsText())
 
@@ -58,7 +58,7 @@ class MadamesProdutosTest {
     @Test
     fun `escrita exige token e respeita inativos`() = testApplication {
         System.setProperty("madames.adminToken", "segredo-teste")
-        application { madamesService(novoBanco()) }
+        application { madamesService(novoBanco(), adminInicial = null) }
 
         val novo = """{"codigo":"NOVO1","nome":"Anel","preco":10.5,"categoria":"Anéis","fotos":["https://x/1.webp"]}"""
         val semToken = client.post("/madames/produtos") {

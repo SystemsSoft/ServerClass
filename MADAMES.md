@@ -23,14 +23,35 @@ O banco `madames_formosas` e as tabelas são criados sozinhos na partida; com a 
 | PUT | `/madames/produtos/{codigo}` | admin — substitui dados e fotos |
 | DELETE | `/madames/produtos/{codigo}` | admin |
 
-Admin = header `Authorization: Bearer <madames.adminToken>`. Produto:
+Admin = header `Authorization: Bearer <madames.adminToken>` (integrações; a equipe usa o login abaixo). Produto:
 `{"codigo":"AR185","nome":"...","preco":63.98,"categoria":"Brincos","fotos":["AR185_1.webp"],"ativo":true}`.
 Em `fotos`, um nome simples é um asset do site (`assets/catalogo/`); uma URL `https://...` é usada como está.
+
+## Área da equipe (botão "Equipe" do site)
+
+Login e senha por pessoa (tabela `usuarios`, senha com PBKDF2; sessão de 30 dias na tabela `sessoes`; 5 senhas erradas
+seguidas bloqueiam o login por 15 minutos). O **administrador** vê todos os produtos, marca vendas, vê as vendas de qualquer
+vendedor e cadastra vendedores; o **vendedor** marca vendas e vê só as próprias. Cada venda (tabela `vendas`) fica atrelada a quem
+a marcou e guarda nome, foto e preço do produto naquele momento; o produto continua no catálogo.
+O primeiro administrador vem de `madames.adminLogin` / `madames.adminPassword`, criado só com a tabela `usuarios` vazia.
+
+Rotas (todas com `Authorization: Bearer <token do login>`, exceto o login):
+
+| Método | Caminho | Quem |
+|---|---|---|
+| POST | `/madames/equipe/login` `{"login","senha"}` → `{token, usuario}` | público |
+| POST | `/madames/equipe/logout` | logado |
+| GET | `/madames/equipe/eu` | logado |
+| GET | `/madames/equipe/produtos` — todos, com o número de vendas | logado |
+| POST | `/madames/equipe/vendas` `{"produtoCodigo"}` — marca como vendido por quem está logado | logado |
+| GET | `/madames/equipe/vendas[?usuarioId=]` — sem parâmetro, as próprias | logado (outra pessoa: admin) |
+| DELETE | `/madames/equipe/vendas/{id}` — desfaz | quem vendeu ou admin |
+| GET / POST | `/madames/equipe/usuarios` — lista / cadastra vendedor `{"nome","login","senha"}` | admin |
 
 ## Configuração
 
 Copie `madames-credentials.properties.example` para `madames-credentials.properties`: `db.host`, `db.user`, `db.password`
-(obrigatórios, sem valor padrão) e `madames.adminToken`.
+(obrigatórios, sem valor padrão), `madames.adminToken` e o primeiro administrador (`madames.adminLogin` / `madames.adminPassword`).
 
 **Rodar local sem MySQL:**
 ```bash
