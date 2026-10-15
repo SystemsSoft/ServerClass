@@ -14,7 +14,6 @@ import schemas.classes.estrelasLeiria.CategoriaService
 import schemas.classes.estrelasLeiria.EbookPaidSessionService
 import schemas.classes.estrelasLeiria.IndicadoService
 import schemas.classes.estrelasLeiria.VotoService
-import schemas.madamesFormosas.ProdutoService
 import schemas.sentinela.SentinelaBillingService
 import schemas.sentinela.SentinelaPushTokenService
 import schemas.sentinela.SentinelaRecordingService
@@ -107,15 +106,6 @@ object DatabaseConfig {
         single { IndicadoService(get(named("EstrelasLeiriaDB"))) }
         single { VotoService(get(named("EstrelasLeiriaDB"))) }
         single { EbookPaidSessionService(get(named("EstrelasLeiriaDB"))) }
-    }
-
-    val madamesFormosas = module {
-        single(named("MadamesFormosasDB")) {
-            // Banco próprio do catálogo da Madames Formosas (mesmo host/usuário do principal).
-            conectarBanco("madames_formosas", maxConexoes = 3)
-        }
-
-        single { ProdutoService(get(named("MadamesFormosasDB"))) }
     }
 
     val resolvebr = module {}

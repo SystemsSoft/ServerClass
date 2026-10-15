@@ -10,7 +10,7 @@ REMOTE_PATH="/home/$SERVER_USER/server-0.0.1.jar"
 # chave aqui local e rodar ./deploy.sh não tinha efeito nenhum: só o JAR
 # subia, o servidor continuava com o properties antigo que já estava lá.
 # Cada um é opcional — só envia os que existirem neste diretório.
-CREDENTIAL_FILES=("aws-credentials.properties" "gemini-credentials.properties" "stripe-credentials.properties" "sentinela-email.properties" "madames-credentials.properties" "firebase-service-account.json")
+CREDENTIAL_FILES=("aws-credentials.properties" "gemini-credentials.properties" "stripe-credentials.properties" "sentinela-email.properties" "firebase-service-account.json")
 
 # A SecretárIA virou serviço próprio (./deploy-secretaria.sh) e NÃO sobe mais neste servidor. Publicar este servidor
 # antes de o nginx encaminhar /secretaria para o serviço novo tira a SecretárIA do ar. Só segue se o /secretaria/health

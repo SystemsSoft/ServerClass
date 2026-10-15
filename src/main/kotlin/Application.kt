@@ -5,7 +5,6 @@ import schemas.classes.UploadService
 import com.class_erp.DatabaseConfig.classModule
 import com.class_erp.DatabaseConfig.clientModule
 import com.class_erp.DatabaseConfig.estrelasLeiria
-import com.class_erp.DatabaseConfig.madamesFormosas
 import com.class_erp.DatabaseConfig.resolvebr
 import com.class_erp.DatabaseConfig.inovaCloud
 import com.class_erp.DatabaseConfig.sentinela
@@ -62,8 +61,6 @@ import org.koin.core.qualifier.named
 import routes.estrelasLeiria.adminTicketRouting
 import routes.estrelasLeiria.cortesiaRouting
 import routes.estrelasLeiria.ebookWebhookRouting
-import routes.madamesFormosas.madamesProdutosRouting
-import schemas.madamesFormosas.ProdutoService
 import java.io.File
 import java.util.Properties
 
@@ -98,7 +95,6 @@ fun Application.module() {
     loadLocalSecrets("gemini-credentials.properties")
     loadLocalSecrets("stripe-credentials.properties")
     loadLocalSecrets("sentinela-email.properties")
-    loadLocalSecrets("madames-credentials.properties")
     (System.getProperty("stripe.apiKey") ?: System.getenv("STRIPE_API_KEY"))?.let {
         com.stripe.Stripe.apiKey = it
     }
@@ -108,7 +104,6 @@ fun Application.module() {
     configureDependencyInjection()
     configureRouting()
     configureRoutingEstrelasLeiria()
-    configureRoutingMadamesFormosas()
     // A SecretárIA roda em processo próprio (subprojeto secretaria/, porta 8081, deploy-secretaria.sh);
     // o nginx encaminha /secretaria e /ws/secretaria para ela.
 }
@@ -130,7 +125,6 @@ private fun Application.configureDependencyInjection() {
             classModule,
             clientModule,
             estrelasLeiria,
-            madamesFormosas,
             resolvebr,
             inovaCloud,
             sentinela,
@@ -178,12 +172,6 @@ private fun Application.configureRouting() {
 }
 
 
-
-private fun Application.configureRoutingMadamesFormosas() {
-    val produtos by inject<ProdutoService>()
-
-    madamesProdutosRouting(produtos)
-}
 
 private fun Application.configureRoutingEstrelasLeiria() {
     val categorias by inject<CategoriaService>()

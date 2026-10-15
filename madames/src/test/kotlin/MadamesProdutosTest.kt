@@ -1,11 +1,10 @@
-import com.class_erp.configureContentNegotiation
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Database
-import routes.madamesFormosas.madamesProdutosRouting
+import madames.madamesService
 import schemas.madamesFormosas.Produto
 import schemas.madamesFormosas.ProdutoService
 import java.util.UUID
@@ -30,11 +29,9 @@ class MadamesProdutosTest {
 
     @Test
     fun `primeira subida grava o catalogo inicial com fotos em ordem`() = testApplication {
-        val service = ProdutoService(novoBanco())
-        application {
-            configureContentNegotiation()
-            madamesProdutosRouting(service)
-        }
+        application { madamesService(novoBanco()) }
+
+        assertEquals("ok", client.get("/madames/health").bodyAsText())
 
         val produtos = json.decodeFromString<List<Produto>>(client.get("/madames/produtos").bodyAsText())
         assertEquals(25, produtos.size)
@@ -61,11 +58,7 @@ class MadamesProdutosTest {
     @Test
     fun `escrita exige token e respeita inativos`() = testApplication {
         System.setProperty("madames.adminToken", "segredo-teste")
-        val service = ProdutoService(novoBanco())
-        application {
-            configureContentNegotiation()
-            madamesProdutosRouting(service)
-        }
+        application { madamesService(novoBanco()) }
 
         val novo = """{"codigo":"NOVO1","nome":"Anel","preco":10.5,"categoria":"Anéis","fotos":["https://x/1.webp"]}"""
         val semToken = client.post("/madames/produtos") {
