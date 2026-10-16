@@ -14,6 +14,7 @@ import java.math.RoundingMode
  *
  * `fotos` guarda, em ordem, o nome do arquivo de cada foto. Um nome simples (ex: "AR185_1.webp")
  * é um asset do site (assets/catalogo/); uma URL completa (http/https) é usada como está.
+ * `estoque` é quantas unidades há para vender: com 0 o site mostra "Sem estoque".
  */
 @Serializable
 data class Produto(
@@ -22,6 +23,7 @@ data class Produto(
     val preco: Double,
     val categoria: String,
     val fotos: List<String>,
+    val estoque: Int = 1,
     val ativo: Boolean = true,
 )
 
@@ -34,6 +36,7 @@ class ProdutoService(private val database: Database) {
         val preco = decimal("preco", precision = 10, scale = 2)
         val categoria = varchar("categoria", length = 60).index()
         val ativo = bool("ativo").default(true)
+        val estoque = integer("estoque").default(1)
 
         override val primaryKey = PrimaryKey(codigo)
     }
@@ -106,6 +109,7 @@ class ProdutoService(private val database: Database) {
             it[nome] = produto.nome
             it[preco] = produto.preco.toPreco()
             it[categoria] = produto.categoria
+            it[estoque] = produto.estoque
             it[ativo] = produto.ativo
         }
         if (alterados > 0) {
@@ -113,6 +117,11 @@ class ProdutoService(private val database: Database) {
             inserirFotos(codigo, produto.fotos)
         }
         alterados > 0
+    }
+
+    /** Define quantas unidades há em estoque. Retorna false se o produto não existir. */
+    suspend fun atualizarEstoque(codigo: String, quantidade: Int): Boolean = dbQuery {
+        ProdutoTable.update({ ProdutoTable.codigo eq codigo }) { it[estoque] = quantidade } > 0
     }
 
     suspend fun delete(codigo: String): Boolean = dbQuery {
@@ -126,6 +135,7 @@ class ProdutoService(private val database: Database) {
             it[nome] = produto.nome
             it[preco] = produto.preco.toPreco()
             it[categoria] = produto.categoria
+            it[estoque] = produto.estoque
             it[ativo] = produto.ativo
         }
         inserirFotos(produto.codigo, produto.fotos)
@@ -153,6 +163,7 @@ class ProdutoService(private val database: Database) {
         preco = row[ProdutoTable.preco].toDouble(),
         categoria = row[ProdutoTable.categoria],
         fotos = fotos,
+        estoque = row[ProdutoTable.estoque],
         ativo = row[ProdutoTable.ativo],
     )
 }

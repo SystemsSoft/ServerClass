@@ -47,6 +47,7 @@ internal fun Produto.validar(): String? = when {
     nome.isBlank() -> "Nome obrigatório"
     categoria.isBlank() -> "Categoria obrigatória"
     preco < 0 -> "Preço inválido"
+    estoque !in 0..9999 -> "Estoque inválido"
     fotos.isEmpty() -> "Informe ao menos uma foto"
     else -> null
 }
