@@ -9,7 +9,9 @@ import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -46,6 +48,8 @@ class SecretariaLiveConfig(
     val idleMillis: Long = 30_000L,
     val setupTimeoutMillis: Long = 10_000L,
     val watchdogIntervalMillis: Long = 2_000L,
+    /** Quanto esperar a Gemini confirmar o fechamento depois que a conversa acabou; ela às vezes nunca responde. */
+    val closeTimeoutMillis: Long = 5_000L,
 ) {
     companion object {
         fun readConfig(property: String, env: String): String? = System.getProperty(property) ?: System.getenv(env)
@@ -182,6 +186,33 @@ class SecretariaLiveBridge(
         buffer: TranscriptBuffer,
         meter: UsageMeter,
         limitMillis: Long,
+    ): Attempt = coroutineScope {
+        // Ao sair do webSocket{} o Ktor espera a Gemini confirmar o Close, sem prazo; ela às vezes nunca confirma
+        // e a chamada ficaria "em andamento" para sempre. Acabada a conversa, o fechamento tem prazo.
+        val talked = CompletableDeferred<Unit>()
+        val connection = async { connect(entry, clientSession, ctx, instruction, voice, buffer, meter, limitMillis, talked) }
+        select {
+            connection.onAwait { it }
+            talked.onAwait {
+                withTimeoutOrNull(config.closeTimeoutMillis) { connection.await() } ?: run {
+                    log.warn("Chamada {}: a Gemini não confirmou o fechamento em {} ms; conexão abandonada", ctx.callId, config.closeTimeoutMillis)
+                    connection.cancel()
+                    Attempt.Finished
+                }
+            }
+        }
+    }
+
+    private suspend fun connect(
+        entry: GeminiKey,
+        clientSession: DefaultWebSocketServerSession,
+        ctx: SecretariaCallContext,
+        instruction: String,
+        voice: String?,
+        buffer: TranscriptBuffer,
+        meter: UsageMeter,
+        limitMillis: Long,
+        talked: CompletableDeferred<Unit>,
     ): Attempt {
         var established = false
         try {
@@ -195,9 +226,14 @@ class SecretariaLiveBridge(
                 clientSession.send(Frame.Text(buildJsonObject {
                     put("type", "session_ready")
                     put("callId", ctx.callId)
+                    put("voice", voice ?: config.voice) // o app toca o "só um instante" nesta mesma voz
                 }.toString()))
                 send(Frame.Text(GeminiLiveMessages.userText(SecretariaPersona.greeting(ctx.caller)).toString()))
-                relay(this, clientSession, ctx, buffer, meter, limitMillis)
+                try {
+                    relay(this, clientSession, ctx, buffer, meter, limitMillis)
+                } finally {
+                    talked.complete(Unit)
+                }
             }
             return Attempt.Finished
         } catch (e: CancellationException) {
@@ -302,8 +338,11 @@ class SecretariaLiveBridge(
         upstream: DefaultClientWebSocketSession,
         clientSession: DefaultWebSocketServerSession,
     ) {
-        // o app toca um sinal de espera e mostra "Verificando…": a IA não pode anunciar isso em voz (derruba a sessão)
-        if (toolCalls.any { it.name != SILENT_TOOL }) runCatching { clientSession.send(Frame.Text("""{"type":"working"}""")) }
+        // o app fala uma frase pronta da ação ("só um instante, vou ver os horários"), toca o sinal de espera e mostra
+        // "Verificando…": a IA não pode anunciar isso em voz (falar e chamar função na mesma resposta derruba a sessão)
+        toolCalls.firstOrNull { it.name != SILENT_TOOL }?.let { call ->
+            runCatching { clientSession.send(Frame.Text(buildJsonObject { put("type", "working"); put("tool", call.name) }.toString())) }
+        }
         val results = toolCalls.map { call ->
             val result = tools.execute(ctx, call.name, call.args)
             result.uiEvent?.let { clientSession.send(Frame.Text(it.toString())) }

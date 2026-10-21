@@ -95,7 +95,8 @@ internal fun Route.operationRoutes(api: SecretariaApi) {
         val access = call.requireClinic(api, Access.WRITE) ?: return@post
         val id = call.idParam() ?: return@post call.bad("id inválido")
         if (api.calls.get(access.clinic.id, id) == null) return@post call.respond(HttpStatusCode.NotFound, ErrorDto("Chamada não encontrada"))
-        if (!api.registry.terminate(id)) api.calls.end(id) // não está neste processo (ex.: ficou órfã): só fecha o registro
+        api.registry.terminate(id) // derruba o socket do paciente, se a chamada roda neste processo
+        api.calls.end(id) // e fecha o registro já: com o paciente fora, a ponte pode demorar (ou travar) para fechar sozinha
         call.respond(HttpStatusCode.NoContent)
     }
 

@@ -18,10 +18,12 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.webSocket
+import io.ktor.server.websocket.webSocketRaw
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -221,6 +223,7 @@ class SecretariaBridgeTest {
                 withTimeout(15_000) {
                     val ready = Json.parseToJsonElement(text(incoming.receive())!!).jsonObject
                     assertEquals("session_ready", ready["type"]!!.jsonPrimitive.content)
+                    assertEquals("Aoede", ready["voice"]!!.jsonPrimitive.content, "o app toca as frases de espera na voz da ligação")
                     callId = ready["callId"]!!.jsonPrimitive.content.toLong()
                     // já durante a ligação o painel sabe quem é (ligação em andamento com nome, CPF, convênio e foto)
                     val active = eventually { runBlocking { fx.calls.activeCall(clinic.id) }?.takeIf { it.patientId != null } }
@@ -354,7 +357,7 @@ class SecretariaBridgeTest {
             assertTrue(frames.any { it.contains("Olá! Sou a SecretárIA.") })
             assertTrue(frames.none { it.contains("toolCall") }, "chamadas de função não vazam para o cliente")
             // a IA chamou funções da agenda: o app recebe o aviso para tocar o sinal de espera
-            assertTrue(frames.any { it == """{"type":"working"}""" }, "o app é avisado de que a IA está verificando")
+            assertTrue(frames.any { it == """{"type":"working","tool":"consultar_horarios_disponiveis"}""" }, "o app é avisado do que a IA está verificando")
             assertTrue(frames.indexOfFirst { it.contains("\"working\"") } < frames.indexOfFirst { it.contains("\"appointment\"") })
             val ui = Json.parseToJsonElement(frames.first { it.contains("\"appointment\"") }).jsonObject
             assertEquals("booked", ui["action"]!!.jsonPrimitive.content)
@@ -412,6 +415,35 @@ class SecretariaBridgeTest {
             }
             eventually { runBlocking { fx.calls.recent(boot.clinicId, 5, 0) }.firstOrNull()?.takeIf { it.state == "encerrada" } }
             Unit
+        }
+    }
+
+    @Test
+    fun `gemini que nao responde ao fechamento nao deixa a chamada em andamento`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        // sessão crua: engole o Close da ponte e nunca responde (o que a Gemini real às vezes faz)
+        val gemini = embeddedServer(Netty, port = 0, host = "127.0.0.1") {
+            install(ServerWebSockets)
+            routing {
+                webSocketRaw("/live") {
+                    incoming.receive() // setup
+                    outgoing.send(Frame.Binary(true, """{"setupComplete":{}}""".toByteArray()))
+                    awaitCancellation()
+                }
+            }
+        }.also { it.start(wait = false); closeables += AutoCloseable { it.stop(100, 500) } }
+        val port = gemini.engine.resolvedConnectors().first().port
+
+        testApplication {
+            start(fx, secretariaTestConfig({ "ws://127.0.0.1:$port/live" }, closeTimeoutMillis = 300))
+            val client = createClient { install(ClientWebSockets) }
+            client.webSocket("/ws/secretaria/${boot.publicKey}?consent=true") {
+                withTimeout(10_000) { incoming.receive() } // session_ready
+                send(Frame.Text("""{"type":"end"}"""))
+            }
+            eventually { runBlocking { fx.calls.activeCount(boot.clinicId) }.takeIf { it == 0L } }
+            assertEquals("encerrada", transaction(fx.db) { CallsTable.selectAll().single()[CallsTable.state].name.lowercase() })
         }
     }
 

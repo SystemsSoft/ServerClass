@@ -92,9 +92,10 @@ fun secretariaTestConfig(
     keys: List<GeminiKey> = listOf(GeminiKey("t", "k")),
     maxCallMillis: Long = 60_000,
     idleMillis: Long = 30_000,
+    closeTimeoutMillis: Long = 5_000,
 ) = SecretariaLiveConfig(
     keys = { keys }, liveUrl = url, model = "models/fake", voice = "Aoede",
-    maxCallMillis = maxCallMillis, idleMillis = idleMillis, watchdogIntervalMillis = 50,
+    maxCallMillis = maxCallMillis, idleMillis = idleMillis, watchdogIntervalMillis = 50, closeTimeoutMillis = closeTimeoutMillis,
 )
 
 /** Sobe o módulo (rotas + Koin) sobre os serviços do [SecretariaFixture]. */
