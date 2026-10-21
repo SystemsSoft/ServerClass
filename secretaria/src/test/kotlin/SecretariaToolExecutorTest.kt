@@ -189,6 +189,22 @@ class SecretariaToolExecutorTest {
     }
 
     @Test
+    fun `medico_id inventado pela IA volta com os ids certos para ela corrigir sozinha`() {
+        val env = Env()
+        for (call in listOf(
+            "agendar_consulta" to """{"medico_id":9999,"inicio":"2026-10-06T09:00","nome_paciente":"Ana Souza","telefone_paciente":"21987654321"}""",
+            "consultar_horarios_disponiveis" to """{"medico_id":9999}""",
+        )) {
+            val response = env.run(call.first, call.second).response
+            assertFalse(response.ok)
+            assertTrue(response.error!!.contains("medico_id 9999 não existe nesta clínica"), response.error)
+            val ids = response["medicos"]!!.jsonArray.map { it.jsonObject["medico_id"]!!.jsonPrimitive.content.toLong() }
+            assertTrue(env.cardio.id in ids)
+        }
+        assertNull(env.callRow().status)
+    }
+
+    @Test
     fun `aceita numeros como texto, como o Gemini as vezes envia`() {
         val env = Env()
         val r = env.run("agendar_consulta", """{"medico_id":"${env.cardio.id}","inicio":"2026-10-06T10:00","nome_paciente":"Ana Souza","telefone_paciente":"21987654321"}""")

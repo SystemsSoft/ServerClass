@@ -14,6 +14,15 @@ object SecretariaPersona {
     const val GREETING =
         "(O paciente acabou de iniciar a chamada pelo aplicativo. Cumprimente-o e pergunte como pode ajudar.)"
 
+    /**
+     * Enviado quando o modelo vazou `<ctrl46>` no lugar da resposta (bug do modelo de áudio nativo, mais comum ao chamar
+     * funções): ele retoma de onde parou em vez de deixar o paciente no silêncio.
+     */
+    const val GARBLED_NUDGE =
+        "(Aviso do sistema, não leia em voz alta: a sua última resposta não chegou ao paciente, ele não ouviu nada. " +
+            "Continue de onde parou. Se você ia chamar uma função e ela ainda não foi chamada, chame agora, sem falar antes; " +
+            "se já tem o resultado, diga ao paciente.)"
+
     /** Abertura da ligação: pelo nome quando o paciente veio do app já cadastrado. */
     fun greeting(caller: CallerInfo?): String =
         if (caller == null) GREETING
@@ -95,7 +104,7 @@ REGRAS IMPORTANTES
         else -> buildString {
             appendLine("MÉDICOS E ESPECIALIDADES CADASTRADOS NESTA CLÍNICA (lista completa no início da ligação)")
             doctors.groupBy { oneLine(it.specialty) }.toSortedMap(String.CASE_INSENSITIVE_ORDER).forEach { (specialty, list) ->
-                appendLine("- $specialty: ${list.joinToString(", ") { oneLine(it.name) }}")
+                appendLine("- $specialty: ${list.joinToString(", ") { "${oneLine(it.name)} (medico_id ${it.id})" }}")
             }
         }.trimEnd()
     }

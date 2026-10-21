@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonPrimitive
@@ -50,12 +51,26 @@ class SecretariaToolExecutor(
     private val calls: SecretariaCallService,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
-    /** [uiEvent]: aviso opcional para o PWA do paciente mostrar um cartão de confirmação. */
-    data class Result(val response: JsonObject, val uiEvent: JsonObject? = null)
+    /**
+     * [uiEvent]: aviso opcional para o PWA do paciente mostrar um cartão de confirmação. [failed]: erro técnico (exceção),
+     * não de validação — a ligação termina com um pedido de desculpas em vez de seguir gastando token.
+     */
+    data class Result(val response: JsonObject, val uiEvent: JsonObject? = null, val failed: Boolean = false)
 
     private val log = LoggerFactory.getLogger("Secretaria.Tools")
 
-    suspend fun execute(ctx: SecretariaCallContext, name: String, args: JsonObject): Result = try {
+    suspend fun execute(ctx: SecretariaCallContext, name: String, args: JsonObject): Result {
+        val started = clock()
+        val result = dispatch(ctx, name, args)
+        // cada função no log, sem nome e telefone do paciente: é o que mostra se a IA chamou (ou não) o agendamento
+        val safeArgs = JsonObject(args.filterKeys { it !in PERSONAL_ARGS })
+        val ok = (result.response["ok"] as? JsonPrimitive)?.booleanOrNull != false
+        val error = (result.response["erro"] as? JsonPrimitive)?.contentOrNull
+        log.info("Chamada {}: {}{} -> {} ({} ms){}", ctx.callId, name, safeArgs, if (ok) "ok" else "erro", clock() - started, error?.let { ": $it" }.orEmpty())
+        return result
+    }
+
+    private suspend fun dispatch(ctx: SecretariaCallContext, name: String, args: JsonObject): Result = try {
         when (name) {
             "listar_medicos_e_especialidades" -> listDoctors(ctx)
             "consultar_horarios_disponiveis" -> availableSlots(ctx, args)
@@ -70,7 +85,7 @@ class SecretariaToolExecutor(
         throw e
     } catch (e: Exception) {
         log.error("Falha na função {} (chamada {}): {}", name, ctx.callId, e.message, e)
-        Result(fail("Não consegui concluir isso agora. Peça desculpas e diga que a equipe da clínica retornará."))
+        Result(fail("Não consegui concluir isso agora."), failed = true)
     }
 
     // ── consultas ────────────────────────────────────────────────────────────
@@ -101,6 +116,7 @@ class SecretariaToolExecutor(
         // "não há horário de X esta semana", dando a entender que a clínica atende X.
         val doctors = clinics.doctors(ctx.clinic.id)
         if (doctors.isEmpty()) return Result(fail(NO_DOCTORS))
+        args.long("medico_id")?.let { id -> unknownDoctor(id, doctors)?.let { return it } }
         val specialty = args.str("especialidade")?.trim()
         if (specialty != null && doctors.none { specialtyMatches(it.specialty, specialty) }) { // mesma regra de availableSlots
             return Result(buildJsonObject {
@@ -156,6 +172,7 @@ class SecretariaToolExecutor(
 
     private suspend fun book(ctx: SecretariaCallContext, args: JsonObject): Result {
         val doctorId = args.long("medico_id") ?: return Result(fail("Falta o medico_id (use consultar_horarios_disponiveis)."))
+        unknownDoctor(doctorId, clinics.doctors(ctx.clinic.id))?.let { return it }
         val start = parseLocalIso(args.str("inicio")) ?: return Result(fail("O 'inicio' deve ser AAAA-MM-DDTHH:MM: a data + \"T\" + um horário livre devolvido por consultar_horarios_disponiveis."))
         val caller = ctx.caller
         val name = caller?.name ?: args.str("nome_paciente")?.trim()?.takeIf { it.split(' ').size >= 2 && it.length >= 5 }
@@ -286,6 +303,18 @@ class SecretariaToolExecutor(
 
     private fun fail(message: String): JsonObject = buildJsonObject { put("ok", false); put("erro", message) }
 
+    /** O modelo às vezes inventa o medico_id (ex.: 1): o erro já traz os ids certos para ele corrigir sozinho. */
+    private fun unknownDoctor(doctorId: Long, doctors: List<schemas.secretaria.DoctorDto>): Result? {
+        if (doctors.any { it.id == doctorId }) return null
+        return Result(buildJsonObject {
+            put("ok", false)
+            put("erro", "O medico_id $doctorId não existe nesta clínica. Use o medico_id certo da lista abaixo e chame a função de novo, sem perguntar nada ao paciente.")
+            putJsonArray("medicos") {
+                doctors.forEach { d -> add(buildJsonObject { put("medico_id", d.id); put("medico", d.name); put("especialidade", d.specialty) }) }
+            }
+        })
+    }
+
     /** Horário fora da grade do médico: lembra a IA de usar só os horários livres (que seguem o intervalo de consulta). */
     private fun withAgendaHint(reason: String): String =
         if (reason.contains("agenda do médico")) "$reason Consulte de novo consultar_horarios_disponiveis e ofereça só os horários livres de lá (eles seguem o intervalo de consulta do médico)." else reason
@@ -302,6 +331,9 @@ class SecretariaToolExecutor(
     // ── declarações enviadas ao Gemini ───────────────────────────────────────
 
     companion object {
+        /** Dados pessoais que ficam fora do log das funções. */
+        private val PERSONAL_ARGS = setOf("nome_paciente", "telefone_paciente")
+
         /** Dias com horário livre listados por médico, e horários por dia (15 em 15 min por 8 h = 32). */
         private const val MAX_DAYS = 5
         private const val MAX_TIMES_PER_DAY = 32

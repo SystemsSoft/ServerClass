@@ -46,6 +46,11 @@ class SecretariaLiveConfig(
     val maxCallMillis: Long = readConfig("secretaria.maxCallSeconds", "SECRETARIA_MAX_CALL_SECONDS")?.toLongOrNull()?.times(1000) ?: 600_000L,
     /** Sem nenhum áudio do paciente por esse tempo, o app foi fechado/perdeu conexão: encerra. */
     val idleMillis: Long = 30_000L,
+    /**
+     * Sem ninguém falar (paciente ou IA) por esse tempo, encerra: o app manda áudio o tempo todo, mesmo em silêncio,
+     * e a Gemini cobra cada segundo desse áudio.
+     */
+    val inactivityMillis: Long = readConfig("secretaria.inactivitySeconds", "SECRETARIA_INACTIVITY_SECONDS")?.toLongOrNull()?.times(1000) ?: 180_000L,
     val setupTimeoutMillis: Long = 10_000L,
     val watchdogIntervalMillis: Long = 2_000L,
     /** Quanto esperar a Gemini confirmar o fechamento depois que a conversa acabou; ela às vezes nunca responde. */
@@ -95,7 +100,11 @@ class SecretariaLiveConfig(
  *
  * Protocolo com o PWA: o cliente envia frames de texto `{"realtimeInput":{"audio":{"data":"<base64 PCM16 16kHz>","mimeType":"audio/pcm;rate=16000"}}}`;
  * recebe os frames da Gemini (áudio PCM 24kHz em `serverContent.modelTurn.parts[].inlineData`, transcrições,
- * `interrupted`...) mais mensagens próprias `{"type": "session_ready" | "appointment" | "time_limit" | "error"}`.
+ * `interrupted`...) mais mensagens próprias `{"type": "session_ready" | "working" | "appointment" | "time_limit" | "hangup" | "error"}`.
+ *
+ * Falha no meio da ligação (a Gemini derrubou a sessão, uma função quebrou, o modelo só devolve `<ctrl46>`) ou 3 min sem
+ * ninguém falar: a sessão com a Gemini é fechada na hora (para de gastar token) e o app recebe `hangup`, pede desculpas
+ * com a frase pronta na voz da SecretárIA e desliga.
  */
 class SecretariaLiveBridge(
     private val tools: SecretariaToolExecutor,
@@ -241,7 +250,7 @@ class SecretariaLiveBridge(
         } catch (e: Exception) {
             if (!established) return Attempt.NotEstablished(e)
             log.error("Sessão Gemini caiu no meio da chamada {}: {}", ctx.callId, e.message)
-            runCatching { clientSession.sendControl("error", "A conexão com a assistente caiu. Ligue novamente.") }
+            runCatching { clientSession.sendHangup(HANGUP_ERROR) }
             return Attempt.Finished
         }
     }
@@ -264,6 +273,7 @@ class SecretariaLiveBridge(
     ) = coroutineScope {
         val startedAt = System.currentTimeMillis()
         val lastClientAt = AtomicLong(startedAt)
+        val lastTalkAt = AtomicLong(startedAt)
         val endedBy = AtomicReference<String?>(null)
 
         val toGemini = launch {
@@ -283,6 +293,8 @@ class SecretariaLiveBridge(
         }
 
         val toClient = launch {
+            var garbledTurn = false
+            var nudges = 0
             try {
                 for (frame in upstream.incoming) {
                     val bytes = frame.bytesOrNull() ?: continue
@@ -290,8 +302,27 @@ class SecretariaLiveBridge(
                     if (message != null) {
                         message.usage?.let(meter::add)
                         buffer.onMessage(message)
-                        if (message.toolCalls.isNotEmpty()) runTools(message.toolCalls, ctx, upstream, clientSession)
+                        if (message.inputText != null || message.outputText != null || message.hasAudio || message.toolCalls.isNotEmpty()) {
+                            lastTalkAt.set(System.currentTimeMillis())
+                        }
+                        if (message.toolCalls.isNotEmpty() && !runTools(message.toolCalls, ctx, upstream, clientSession)) {
+                            endedBy.compareAndSet(null, "tool_error")
+                            return@launch
+                        }
+                        if (message.garbled) garbledTurn = true
+                        if (message.turnComplete && garbledTurn) {
+                            garbledTurn = false
+                            if (nudges >= MAX_GARBLED_NUDGES) {
+                                log.warn("Chamada {}: o modelo respondeu com tokens internos (<ctrl..>) de novo; encerrando", ctx.callId)
+                                endedBy.compareAndSet(null, "garbled")
+                                return@launch
+                            }
+                            nudges++
+                            log.warn("Chamada {}: o modelo respondeu com tokens internos (<ctrl..>); pedindo para continuar", ctx.callId)
+                            upstream.send(Frame.Text(GeminiLiveMessages.userText(SecretariaPersona.GARBLED_NUDGE).toString()))
+                        }
                         if (message.internalOnly) continue
+                        if (message.garbled && !message.hasAudio) continue // as legendas do app não mostram <ctrl46>
                     }
                     clientSession.send(if (frame is Frame.Text) Frame.Text(String(bytes, Charsets.UTF_8)) else Frame.Binary(true, bytes))
                 }
@@ -313,6 +344,10 @@ class SecretariaLiveBridge(
                     endedBy.compareAndSet(null, "idle")
                     return@launch
                 }
+                if (now - lastTalkAt.get() >= config.inactivityMillis) {
+                    endedBy.compareAndSet(null, "inactive")
+                    return@launch
+                }
             }
         }
 
@@ -327,28 +362,36 @@ class SecretariaLiveBridge(
             // o motivo que a Gemini manda ao fechar (ex.: 1007 "audio content type not supported") é o que explica a queda
             val reason = withTimeoutOrNull(1_000) { upstream.closeReason.await() }
             log.warn("Chamada {}: a Gemini fechou a sessão. Motivo: {}", ctx.callId, reason ?: "não informado")
-            runCatching { clientSession.sendControl("error", "A assistente encerrou a conexão. Ligue novamente.") }
+        }
+        // a sessão com a Gemini fecha logo em seguida (fim do webSocket{}): o app se despede sem gastar mais token
+        when (endedBy.get()) {
+            "gemini", "tool_error", "garbled" -> runCatching { clientSession.sendHangup(HANGUP_ERROR) }
+            "inactive", "idle" -> runCatching { clientSession.sendHangup(HANGUP_IDLE) }
         }
         log.info("Chamada {} encerrada por: {}", ctx.callId, endedBy.get())
     }
 
+    /** Executa as funções e devolve o resultado à Gemini; false se uma delas falhou por erro técnico (a ligação acaba). */
     private suspend fun runTools(
         toolCalls: List<GeminiToolCall>,
         ctx: SecretariaCallContext,
         upstream: DefaultClientWebSocketSession,
         clientSession: DefaultWebSocketServerSession,
-    ) {
+    ): Boolean {
         // o app fala uma frase pronta da ação ("só um instante, vou ver os horários"), toca o sinal de espera e mostra
         // "Verificando…": a IA não pode anunciar isso em voz (falar e chamar função na mesma resposta derruba a sessão)
         toolCalls.firstOrNull { it.name != SILENT_TOOL }?.let { call ->
             runCatching { clientSession.send(Frame.Text(buildJsonObject { put("type", "working"); put("tool", call.name) }.toString())) }
         }
-        val results = toolCalls.map { call ->
+        val results = mutableListOf<Triple<String?, String, JsonObject>>()
+        for (call in toolCalls) {
             val result = tools.execute(ctx, call.name, call.args)
+            if (result.failed) return false
             result.uiEvent?.let { clientSession.send(Frame.Text(it.toString())) }
-            Triple(call.id, call.name, result.response)
+            results += Triple(call.id, call.name, result.response)
         }
         upstream.send(Frame.Text(GeminiLiveMessages.toolResponse(results).toString()))
+        return true
     }
 
     private fun Frame.bytesOrNull(): ByteArray? = when (this) {
@@ -374,7 +417,7 @@ class SecretariaLiveBridge(
             message.inputText?.let { user.append(it) }
             message.outputText?.let {
                 if (user.isNotEmpty()) flush(Speaker.PACIENTE, user)
-                model.append(it)
+                model.append(it.replace(GeminiLiveMessages.CONTROL_TOKEN, ""))
             }
             if (message.turnComplete || message.interrupted) flushAll()
         }
@@ -395,5 +438,19 @@ class SecretariaLiveBridge(
         const val MAX_CLIENT_FRAME_BYTES = 256 * 1024
         /** Função rápida e invisível para o paciente: não toca o sinal de espera. */
         const val SILENT_TOOL = "registrar_assunto"
+        /** Quantas vezes por ligação pedir ao modelo que retome depois de vazar <ctrl..>; na seguinte, a ligação acaba. */
+        const val MAX_GARBLED_NUDGES = 1
     }
+}
+
+const val HANGUP_ERROR = "error"
+const val HANGUP_IDLE = "idle"
+const val HANGUP_CLINIC = "clinic"
+
+/**
+ * Avisa o app que o servidor está encerrando a ligação ([reason]: [HANGUP_ERROR], [HANGUP_IDLE] ou [HANGUP_CLINIC]):
+ * ele para de mandar áudio, se despede com a frase pronta na voz da SecretárIA e desliga.
+ */
+internal suspend fun DefaultWebSocketServerSession.sendHangup(reason: String) {
+    send(Frame.Text(buildJsonObject { put("type", "hangup"); put("reason", reason) }.toString()))
 }

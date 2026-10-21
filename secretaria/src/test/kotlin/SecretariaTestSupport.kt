@@ -93,9 +93,11 @@ fun secretariaTestConfig(
     maxCallMillis: Long = 60_000,
     idleMillis: Long = 30_000,
     closeTimeoutMillis: Long = 5_000,
+    inactivityMillis: Long = 180_000,
 ) = SecretariaLiveConfig(
     keys = { keys }, liveUrl = url, model = "models/fake", voice = "Aoede",
     maxCallMillis = maxCallMillis, idleMillis = idleMillis, watchdogIntervalMillis = 50, closeTimeoutMillis = closeTimeoutMillis,
+    inactivityMillis = inactivityMillis,
 )
 
 /** Sobe o módulo (rotas + Koin) sobre os serviços do [SecretariaFixture]. */

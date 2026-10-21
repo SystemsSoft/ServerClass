@@ -76,7 +76,10 @@ class SecretariaCallHandler(
         // paciente do app: a ligação já nasce com ele (o painel mostra foto e dados desde o começo)
         caller?.let { calls.attachPatient(started.id, it.patientId, it.name, it.phone) }
         val ctx = SecretariaCallContext(clinic, started.id, started.startedAt, caller)
-        registry.register(started.id) { session.close(CloseReason(CloseReason.Codes.NORMAL, "Encerrada pela clínica")) }
+        registry.register(started.id) {
+            runCatching { session.sendHangup(HANGUP_CLINIC) }
+            session.close(CloseReason(CloseReason.Codes.NORMAL, "Encerrada pela clínica"))
+        }
         log.info("Chamada {} iniciada (clínica {})", started.id, clinic.id)
 
         try {

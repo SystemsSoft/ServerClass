@@ -18,12 +18,11 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.webSocket
-import io.ktor.server.websocket.webSocketRaw
 import io.ktor.websocket.Frame
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,6 +97,53 @@ class FakeGemini(private val script: suspend DefaultWebSocketServerSession.(Fake
     }
 
     override fun close() = server.stop(100, 500)
+}
+
+/**
+ * "Gemini" que aceita o WebSocket, confirma o setup e depois nunca responde ao Close (lê e descarta tudo), como a Gemini
+ * real às vezes faz: sem prazo no fechamento, a ponte ficava presa e a chamada "em andamento" (em produção, por 1 h).
+ */
+class SilentCloseGemini : AutoCloseable {
+    private val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())
+    private val sockets = CopyOnWriteArrayList<java.net.Socket>()
+    /** A ponte fechou a conexão TCP (a sessão paga com a Gemini acabou de verdade). */
+    val disconnected = CompletableDeferred<Unit>()
+    val url get() = "ws://127.0.0.1:${server.localPort}/live"
+
+    init {
+        Thread {
+            while (!server.isClosed) {
+                val socket = runCatching { server.accept() }.getOrNull() ?: break
+                sockets += socket
+                Thread { serve(socket) }.apply { isDaemon = true }.start()
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    private fun serve(socket: java.net.Socket) = runCatching {
+        val input = socket.getInputStream()
+        val head = StringBuilder()
+        while (!head.endsWith("\r\n\r\n")) head.append(input.read().takeIf { it >= 0 }?.toChar() ?: return@runCatching)
+        val key = head.lines().first { it.startsWith("Sec-WebSocket-Key:", ignoreCase = true) }.substringAfter(':').trim()
+        val accept = java.util.Base64.getEncoder().encodeToString(
+            java.security.MessageDigest.getInstance("SHA-1").digest((key + "258EAFA5-E914-47DA-95CA-C5AB0DC525B6").toByteArray()),
+        )
+        val out = socket.getOutputStream()
+        out.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $accept\r\n\r\n".toByteArray())
+        val ready = """{"setupComplete":{}}""".toByteArray()
+        out.write(byteArrayOf(0x82.toByte(), ready.size.toByte()) + ready) // frame binário, como a Gemini real
+        out.flush()
+        try {
+            while (input.read() >= 0) { } // engole o Close e nunca responde
+        } finally {
+            disconnected.complete(Unit)
+        }
+    }
+
+    override fun close() {
+        server.close()
+        sockets.forEach { runCatching { it.close() } }
+    }
 }
 
 class SecretariaBridgeTest {
@@ -419,24 +465,55 @@ class SecretariaBridgeTest {
     }
 
     @Test
+    fun `modelo que vaza ctrl46 no lugar da resposta e chamado a continuar e o lixo nao aparece`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val nudged = CompletableDeferred<JsonObject>()
+        val gemini = fake { g ->
+            with(g) {
+                handshake()
+                say("""{"serverContent":{"outputTranscription":{"text":"Confirma o agendamento?"}}}""")
+                say("""{"serverContent":{"turnComplete":true}}""")
+                say("""{"serverContent":{"outputTranscription":{"text":"<ctrl46><ctrl46>"}}}""")
+                say("""{"serverContent":{"turnComplete":true}}""")
+                nudged.complete(next()) // a ponte pede para o modelo retomar
+                say("""{"serverContent":{"outputTranscription":{"text":"Pronto, marquei."}}}""")
+                say("""{"serverContent":{"turnComplete":true}}""")
+                for (f in incoming) { }
+            }
+        }
+
+        testApplication {
+            start(fx, config({ gemini.url }))
+            val client = createClient { install(ClientWebSockets) }
+            val seen = mutableListOf<String>()
+            client.webSocket("/ws/secretaria/${boot.publicKey}?consent=true") {
+                withTimeout(10_000) {
+                    for (f in incoming) {
+                        text(f)?.let { seen += it }
+                        if (seen.any { it.contains("Pronto, marquei.") }) break
+                    }
+                }
+                send(Frame.Text("""{"type":"end"}"""))
+            }
+            val nudge = withTimeout(10_000) { nudged.await() }.toString()
+            assertTrue(nudge.contains("Continue de onde parou"), nudge)
+            assertTrue(seen.none { it.contains("ctrl46") }, "as legendas do app não mostram o lixo: $seen")
+
+            val callId = eventually { runBlocking { fx.calls.recent(boot.clinicId, 5, 0) }.firstOrNull()?.takeIf { it.state == "encerrada" } }.id
+            val transcript = eventually { runBlocking { fx.calls.transcript(boot.clinicId, callId) }?.takeIf { t -> t.any { it.content.contains("Pronto") } } }
+            assertTrue(transcript.none { it.content.contains("ctrl") }, transcript.toString())
+        }
+    }
+
+    @Test
     fun `gemini que nao responde ao fechamento nao deixa a chamada em andamento`() = runBlocking<Unit> {
         val fx = SecretariaFixture()
         val boot = fx.bootstrap()
-        // sessão crua: engole o Close da ponte e nunca responde (o que a Gemini real às vezes faz)
-        val gemini = embeddedServer(Netty, port = 0, host = "127.0.0.1") {
-            install(ServerWebSockets)
-            routing {
-                webSocketRaw("/live") {
-                    incoming.receive() // setup
-                    outgoing.send(Frame.Binary(true, """{"setupComplete":{}}""".toByteArray()))
-                    awaitCancellation()
-                }
-            }
-        }.also { it.start(wait = false); closeables += AutoCloseable { it.stop(100, 500) } }
-        val port = gemini.engine.resolvedConnectors().first().port
+        val gemini = SilentCloseGemini().also { closeables += it }
 
         testApplication {
-            start(fx, secretariaTestConfig({ "ws://127.0.0.1:$port/live" }, closeTimeoutMillis = 300))
+            start(fx, secretariaTestConfig({ gemini.url }, closeTimeoutMillis = 300))
             val client = createClient { install(ClientWebSockets) }
             client.webSocket("/ws/secretaria/${boot.publicKey}?consent=true") {
                 withTimeout(10_000) { incoming.receive() } // session_ready
@@ -444,6 +521,108 @@ class SecretariaBridgeTest {
             }
             eventually { runBlocking { fx.calls.activeCount(boot.clinicId) }.takeIf { it == 0L } }
             assertEquals("encerrada", transaction(fx.db) { CallsTable.selectAll().single()[CallsTable.state].name.lowercase() })
+            withTimeout(5_000) { gemini.disconnected.await() } // a conexão com a Gemini não fica aberta gastando
+        }
+    }
+
+    // ── erro ou silêncio no meio da ligação: fecha a Gemini e o app se despede ──
+
+    /** Liga, junta o que o app recebe até o servidor fechar e devolve as mensagens de texto. */
+    private suspend fun ApplicationTestBuilder.callAndCollect(publicKey: String, beforeClose: suspend io.ktor.client.plugins.websocket.DefaultClientWebSocketSession.() -> Unit = {}): List<String> {
+        val client = createClient { install(ClientWebSockets) }
+        val seen = mutableListOf<String>()
+        client.webSocket("/ws/secretaria/$publicKey?consent=true") {
+            beforeClose()
+            withTimeout(10_000) { for (f in incoming) { text(f)?.let { seen += it } } }
+        }
+        return seen
+    }
+
+    private fun hangup(reason: String) = """{"type":"hangup","reason":"$reason"}"""
+
+    @Test
+    fun `3 minutos sem ninguem falar encerra a chamada e fecha a Gemini`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val geminiClosed = CompletableDeferred<Unit>()
+        val gemini = fake { g -> with(g) { handshake(); try { for (f in incoming) { } } finally { geminiClosed.complete(Unit) } } }
+
+        testApplication {
+            start(fx, secretariaTestConfig({ gemini.url }, inactivityMillis = 400))
+            val seen = callAndCollect(boot.publicKey) {
+                // o app manda áudio (silêncio) o tempo todo: isso não conta como conversa
+                launch { while (true) { send(Frame.Text("""{"realtimeInput":{"audio":{"data":"AAAA","mimeType":"audio/pcm;rate=16000"}}}""")); delay(50) } }
+            }
+            assertTrue(hangup("idle") in seen, seen.toString())
+            withTimeout(5_000) { geminiClosed.await() }
+            eventually { runBlocking { fx.calls.activeCount(boot.clinicId) }.takeIf { it == 0L } }
+            Unit
+        }
+    }
+
+    @Test
+    fun `gemini derruba a sessao no meio da ligacao - o app pede desculpas e desliga`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val gemini = fake { g -> with(g) { handshake(); close(CloseReason(1007, "The audio content type (CONTENT_TYPE_AUDIO) is not supported")) } }
+
+        testApplication {
+            start(fx, config({ gemini.url }))
+            val seen = callAndCollect(boot.publicKey)
+            assertTrue(hangup("error") in seen, seen.toString())
+            eventually { runBlocking { fx.calls.activeCount(boot.clinicId) }.takeIf { it == 0L } }
+            Unit
+        }
+    }
+
+    @Test
+    fun `funcao que quebra por erro tecnico encerra a ligacao sem devolver nada a Gemini`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val geminiClosed = CompletableDeferred<Unit>()
+        val gemini = fake { g ->
+            with(g) {
+                handshake()
+                transaction(fx.db) { exec("ALTER TABLE doctors RENAME TO doctors_fora") } // o banco falha na consulta
+                say("""{"toolCall":{"functionCalls":[{"id":"t1","name":"listar_medicos_e_especialidades","args":{}}]}}""")
+                try { for (f in incoming) { } } finally { geminiClosed.complete(Unit) }
+            }
+        }
+
+        testApplication {
+            start(fx, config({ gemini.url }))
+            val seen = callAndCollect(boot.publicKey)
+            assertTrue(hangup("error") in seen, seen.toString())
+            withTimeout(5_000) { geminiClosed.await() }
+            assertTrue(gemini.received.none { it.containsKey("toolResponse") }, "a Gemini não recebe resposta: a sessão acaba")
+            eventually { runBlocking { fx.calls.activeCount(boot.clinicId) }.takeIf { it == 0L } }
+            Unit
+        }
+    }
+
+    @Test
+    fun `ctrl46 de novo depois do pedido para continuar encerra a ligacao`() = runBlocking<Unit> {
+        val fx = SecretariaFixture()
+        val boot = fx.bootstrap()
+        val gemini = fake { g ->
+            with(g) {
+                handshake()
+                say("""{"serverContent":{"outputTranscription":{"text":"<ctrl46><ctrl46>"}}}""")
+                say("""{"serverContent":{"turnComplete":true}}""")
+                next() // pedido para continuar
+                say("""{"serverContent":{"outputTranscription":{"text":"<ctrl46>"}}}""")
+                say("""{"serverContent":{"turnComplete":true}}""")
+                for (f in incoming) { }
+            }
+        }
+
+        testApplication {
+            start(fx, config({ gemini.url }))
+            val seen = callAndCollect(boot.publicKey)
+            assertTrue(hangup("error") in seen, seen.toString())
+            assertEquals(1, gemini.received.count { it.toString().contains("Continue de onde parou") }, "um pedido para continuar só")
+            eventually { runBlocking { fx.calls.activeCount(boot.clinicId) }.takeIf { it == 0L } }
+            Unit
         }
     }
 
@@ -686,7 +865,9 @@ class SecretariaBridgeTest {
 
                 val end = this@testApplication.client.post("/secretaria/calls/$id/end?clinicId=${boot.clinicId}") { header(HttpHeaders.Authorization, "Bearer $admin") }
                 assertEquals(HttpStatusCode.NoContent, end.status)
-                withTimeout(10_000) { for (f in incoming) { } } // o servidor fecha o socket do paciente
+                val after = mutableListOf<String>()
+                withTimeout(10_000) { for (f in incoming) { text(f)?.let { after += it } } } // o servidor fecha o socket do paciente
+                assertTrue(hangup("clinic") in after, "o app sabe que foi a clínica: $after")
             }
             eventually { runBlocking { fx.calls.activeCount(boot.clinicId) }.takeIf { it == 0L } }
             assertEquals("encerrada", transaction(fx.db) { CallsTable.selectAll().single()[CallsTable.state].name.lowercase() })

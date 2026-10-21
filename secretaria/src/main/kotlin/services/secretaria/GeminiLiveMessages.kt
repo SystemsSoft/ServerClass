@@ -29,17 +29,25 @@ data class GeminiServerMessage(
     val outputText: String? = null,
     val turnComplete: Boolean = false,
     val interrupted: Boolean = false,
+    /** A mensagem traz áudio da IA (`modelTurn.parts[].inlineData`). */
+    val hasAudio: Boolean = false,
     /** Tokens desta mensagem (`usageMetadata`), por tipo; null se a mensagem não trouxer. */
     val usage: TokenUsage? = null,
 ) {
     /** Mensagens de função são resolvidas pelo servidor — o cliente (PWA) não precisa vê-las. */
     val internalOnly: Boolean get() = toolCalls.isNotEmpty() || toolCancellation || setupComplete
+
+    /** O modelo vazou tokens internos (`<ctrl46>`) em vez de falar ou chamar a função: o paciente não ouve nada. */
+    val garbled: Boolean get() = outputText?.let { GeminiLiveMessages.CONTROL_TOKEN.containsMatchIn(it) } == true
 }
 
 /** Protocolo JSON da Gemini Live API (BidiGenerateContent): leitura e montagem de mensagens. */
 object GeminiLiveMessages {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** Token interno que o modelo de áudio nativo às vezes manda na transcrição no lugar de uma chamada de função. */
+    val CONTROL_TOKEN = Regex("<ctrl\\d+>")
 
     /**
      * A Gemini manda JSON em frames de texto ou binários. Retorna null se os bytes não forem um objeto
@@ -61,6 +69,8 @@ object GeminiLiveMessages {
             outputText = content?.get("outputTranscription")?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull,
             turnComplete = content?.get("turnComplete")?.jsonPrimitive?.booleanOrNull == true,
             interrupted = content?.get("interrupted")?.jsonPrimitive?.booleanOrNull == true,
+            hasAudio = (content?.get("modelTurn") as? JsonObject)?.get("parts")?.jsonArray.orEmpty()
+                .any { (it as? JsonObject)?.containsKey("inlineData") == true },
             usage = (root["usageMetadata"] as? JsonObject)?.let(::usageOf),
         )
     }
