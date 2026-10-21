@@ -107,7 +107,8 @@ object SecretariaSlots {
 }
 
 sealed class BookResult {
-    data class Ok(val appointment: AppointmentDto) : BookResult()
+    /** [repeated]: a IA pediu de novo, na mesma ligação, o que já tinha marcado para o paciente: nada foi criado. */
+    data class Ok(val appointment: AppointmentDto, val repeated: Boolean = false) : BookResult()
 
     /** [reason] é uma frase em português que a IA pode repetir ao paciente. */
     data class Fail(val reason: String) : BookResult()
@@ -271,8 +272,16 @@ class SecretariaAppointmentService(
 
         val busy = AppointmentsTable.selectAll()
             .where { (AppointmentsTable.doctorId eq doctorId) and (AppointmentsTable.startsAt eq startsAt) and AppointmentsTable.activeSlot.isNotNull() }
-            .any()
-        if (busy) return BookResult.Fail("Esse horário acabou de ser ocupado.")
+            .singleOrNull()
+        if (busy != null) {
+            // a IA às vezes chama agendar de novo depois do "sim, confirma": na mesma ligação e para o mesmo paciente,
+            // é o mesmo agendamento, não um conflito (pelo painel da equipe continua sendo "ocupado")
+            val sameCall = sourceCallId != null && busy[AppointmentsTable.sourceCallId] == sourceCallId
+            if (sameCall && busy[AppointmentsTable.patientId] == patientId && rescheduledFromId == null) {
+                return BookResult.Ok(loadDto(busy[AppointmentsTable.id], clinic.zone), repeated = true)
+            }
+            return BookResult.Fail("Esse horário acabou de ser ocupado.")
+        }
 
         doctor[DoctorsTable.maxPerDay]?.let { limit ->
             val dayStart = startLocal.toLocalDate().atStartOfDay().toEpochMs(clinic.zone)

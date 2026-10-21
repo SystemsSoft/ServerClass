@@ -12,6 +12,9 @@ import schemas.secretaria.ScheduleWindowDto
 import services.secretaria.CallerInfo
 import services.secretaria.SecretariaCallContext
 import services.secretaria.SecretariaToolExecutor
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import schemas.secretaria.AppointmentsTable
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -186,6 +189,37 @@ class SecretariaToolExecutorTest {
         val busy = env.book(name = "Beto Lima", phone = "21911112222").response
         assertFalse(busy.ok)
         assertNotNull(busy.error)
+    }
+
+    @Test
+    fun `horario pedido vem respondido - livre, ou os livres mais proximos do mesmo dia`() {
+        val env = Env()
+        val ask = """{"especialidade":"Cardiologia","a_partir_de":"2026-10-06","dias":1,"horario":"9h"}"""
+        val free = env.run("consultar_horarios_disponiveis", ask).response["horario_pedido"]!!.jsonObject
+        assertTrue(free["livre"]!!.jsonPrimitive.boolean)
+        assertEquals("2026-10-06T09:00", free["inicio"]!!.jsonPrimitive.content)
+        assertEquals(env.cardio.id, free["medicos"]!!.jsonArray.single().jsonObject["medico_id"]!!.jsonPrimitive.content.toLong())
+
+        assertTrue(env.book().response.ok) // ocupa terça 09:00
+        val taken = env.run("consultar_horarios_disponiveis", ask).response["horario_pedido"]!!.jsonObject
+        assertFalse(taken["livre"]!!.jsonPrimitive.boolean)
+        assertEquals(listOf("08:30", "09:30", "08:00"), taken["mais_proximos"]!!.jsonArray.map { it.jsonObject["horario"]!!.jsonPrimitive.content })
+
+        // sem horario (ou um que não é horário): resposta de sempre, sem veredito
+        assertNull(env.run("consultar_horarios_disponiveis", """{"especialidade":"Cardiologia","horario":"de manhã"}""").response["horario_pedido"])
+    }
+
+    @Test
+    fun `agendar de novo o mesmo horario para o mesmo paciente nao duplica nem acusa ocupado`() {
+        val env = Env()
+        val first = env.book().response
+        assertTrue(first.ok)
+        val again = env.book().response // a IA repetiu o agendar depois do "sim, confirma"
+        assertTrue(again.ok)
+        assertEquals(first["agendamento_id"], again["agendamento_id"])
+        assertTrue(again["instrucao"]!!.jsonPrimitive.content.contains("já estava marcada"))
+        assertEquals(1L, transaction(env.fx.db) { AppointmentsTable.selectAll().count() })
+        assertFalse(env.book(name = "Beto Lima", phone = "21911112222").response.ok) // outro paciente: ocupado de verdade
     }
 
     @Test

@@ -385,6 +385,12 @@ class SecretariaLiveBridge(
         }
         val results = mutableListOf<Triple<String?, String, JsonObject>>()
         for (call in toolCalls) {
+            if (call.name == SILENT_TOOL) {
+                // só alimenta o painel: a Gemini recebe o ok na hora e o banco é gravado em paralelo, sem atrasar a fala
+                clientSession.launch { tools.execute(ctx, call.name, call.args) }
+                results += Triple(call.id, call.name, buildJsonObject { put("ok", true) })
+                continue
+            }
             val result = tools.execute(ctx, call.name, call.args)
             if (result.failed) return false
             result.uiEvent?.let { clientSession.send(Frame.Text(it.toString())) }

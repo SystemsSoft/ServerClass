@@ -99,6 +99,20 @@ class SecretariaCallService(
         database.dbQuery { CallsTable.update({ CallsTable.id eq callId }) { it[CallsTable.doctorId] = doctorId } }
     }
 
+    /** Resultado de uma função de agenda, de uma vez (paciente, médico e resultado): uma ida ao banco só. */
+    suspend fun recordOutcome(callId: Long, patientId: Long, name: String, phone: String, doctorId: Long?, outcome: CallOutcome, intent: CallIntent) {
+        database.dbQuery {
+            CallsTable.update({ CallsTable.id eq callId }) {
+                it[CallsTable.patientId] = patientId
+                it[callerName] = name.take(120)
+                it[callerPhone] = phone
+                doctorId?.let { d -> it[CallsTable.doctorId] = d }
+                it[CallsTable.outcome] = outcome
+                it[CallsTable.intent] = intent
+            }
+        }
+    }
+
     suspend fun setOutcome(callId: Long, outcome: CallOutcome, intent: CallIntent) {
         database.dbQuery {
             CallsTable.update({ CallsTable.id eq callId }) {

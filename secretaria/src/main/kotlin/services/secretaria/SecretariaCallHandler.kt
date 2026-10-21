@@ -75,7 +75,6 @@ class SecretariaCallHandler(
         val started = calls.start(clinic.id, CallChannel.PWA, model)
         // paciente do app: a ligação já nasce com ele (o painel mostra foto e dados desde o começo)
         caller?.let { calls.attachPatient(started.id, it.patientId, it.name, it.phone) }
-        val ctx = SecretariaCallContext(clinic, started.id, started.startedAt, caller)
         registry.register(started.id) {
             runCatching { session.sendHangup(HANGUP_CLINIC) }
             session.close(CloseReason(CloseReason.Codes.NORMAL, "Encerrada pela clínica"))
@@ -89,6 +88,8 @@ class SecretariaCallHandler(
                 .onFailure { log.warn("Chamada {}: não li os médicos para a persona ({}); a IA vai consultar a função", started.id, it.message) }
                 .getOrNull()
             val instruction = SecretariaPersona.systemInstruction(clinic.name, clinic.responsibleName, now, config.extraInstructions, doctors, caller)
+            // as funções reaproveitam os médicos já lidos (uma ida ao banco a menos por consulta/agendamento)
+            val ctx = SecretariaCallContext(clinic, started.id, started.startedAt, caller, doctors)
             bridge.run(session, ctx, instruction, config.voice, maxCallMillis = allowance.remainingSeconds?.times(1000))
         } finally {
             withContext(NonCancellable) {

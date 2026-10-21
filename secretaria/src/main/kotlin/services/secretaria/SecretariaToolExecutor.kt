@@ -31,11 +31,20 @@ import schemas.secretaria.namesMatch
 import schemas.secretaria.normalizePhone
 import schemas.secretaria.parseLocalIso
 import schemas.secretaria.specialtyMatches
+import schemas.secretaria.DoctorAvailability
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 
 /** Estado de uma chamada em andamento, compartilhado entre a ponte e as funções da IA. */
-class SecretariaCallContext(val clinic: ClinicInfo, val callId: Long, val startedAt: Long, val caller: CallerInfo? = null)
+/** [doctors]: médicos lidos no início da ligação (os mesmos da persona); null = não deu para ler, as funções consultam. */
+class SecretariaCallContext(
+    val clinic: ClinicInfo,
+    val callId: Long,
+    val startedAt: Long,
+    val caller: CallerInfo? = null,
+    val doctors: List<schemas.secretaria.DoctorDto>? = null,
+)
 
 /** Paciente que ligou pelo app já cadastrado (identificado pelo CPF): a IA não pede nome nem telefone. */
 data class CallerInfo(val patientId: Long, val name: String, val phone: String, val healthPlan: String)
@@ -114,7 +123,7 @@ class SecretariaToolExecutor(
 
         // Especialidade que a clínica não tem não é "sem horário": é "não atendemos". Sem isso a IA dizia
         // "não há horário de X esta semana", dando a entender que a clínica atende X.
-        val doctors = clinics.doctors(ctx.clinic.id)
+        val doctors = doctorsOf(ctx)
         if (doctors.isEmpty()) return Result(fail(NO_DOCTORS))
         args.long("medico_id")?.let { id -> unknownDoctor(id, doctors)?.let { return it } }
         val specialty = args.str("especialidade")?.trim()
@@ -134,8 +143,11 @@ class SecretariaToolExecutor(
         // existem na grade do médico (ex.: de 30 em 30 min) e sabe que há outros dias além dos listados.
         val availability = appointments.availability(ctx.clinic, args.long("medico_id"), specialty, from, days)
         val anyFree = availability.any { it.freeSlots.isNotEmpty() }
+        val wanted = args.str("horario")?.let(::parseTime)
         return Result(buildJsonObject {
             put("ok", true)
+            // o paciente já disse dia e hora: a resposta vem pronta, sem a IA ter de procurar (e errar) na lista
+            wanted?.let { put("horario_pedido", requestedSlot(from, it, availability)) }
             putJsonArray("medicos") {
                 availability.forEach { a ->
                     val byDay = a.freeSlots.groupBy { it.toLocalDate() }.toSortedMap()
@@ -158,12 +170,7 @@ class SecretariaToolExecutor(
                     })
                 }
             }
-            put(
-                "como_usar",
-                "Só existem os horários de horarios_livres: eles já seguem a duração da consulta e o atendimento de cada médico. " +
-                    "Para agendar, use o medico_id e inicio = data + \"T\" + horário (ex.: ${from}T09:30). " +
-                    "Para outros dias, chame de novo com a_partir_de.",
-            )
+            put("como_usar", "Ofereça só horários de horarios_livres. Para agendar: medico_id e inicio = data + \"T\" + horário (ex.: ${from}T09:30).")
             if (!anyFree) put("mensagem", "Não há horários livres nesse período para o que foi pedido. Ofereça buscar outra data (a_partir_de) ou outro médico da mesma especialidade.")
         })
     }
@@ -172,7 +179,7 @@ class SecretariaToolExecutor(
 
     private suspend fun book(ctx: SecretariaCallContext, args: JsonObject): Result {
         val doctorId = args.long("medico_id") ?: return Result(fail("Falta o medico_id (use consultar_horarios_disponiveis)."))
-        unknownDoctor(doctorId, clinics.doctors(ctx.clinic.id))?.let { return it }
+        unknownDoctor(doctorId, doctorsOf(ctx))?.let { return it }
         val start = parseLocalIso(args.str("inicio")) ?: return Result(fail("O 'inicio' deve ser AAAA-MM-DDTHH:MM: a data + \"T\" + um horário livre devolvido por consultar_horarios_disponiveis."))
         val caller = ctx.caller
         val name = caller?.name ?: args.str("nome_paciente")?.trim()?.takeIf { it.split(' ').size >= 2 && it.length >= 5 }
@@ -186,9 +193,14 @@ class SecretariaToolExecutor(
             is BookResult.Fail -> Result(fail(withAgendaHint(result.reason)))
             is BookResult.Ok -> {
                 val a = result.appointment
-                calls.attachPatient(ctx.callId, patientId, name, phone)
-                calls.setDoctor(ctx.callId, a.doctorId)
-                calls.setOutcome(ctx.callId, CallOutcome.AGENDADA, CallIntent.AGENDAMENTO)
+                if (result.repeated) return Result(buildJsonObject {
+                    put("ok", true)
+                    put("agendamento_id", a.id)
+                    put("medico", a.doctorName)
+                    put("inicio", a.startLocal)
+                    put("instrucao", "Esta consulta já estava marcada nesta ligação: não marque de novo, só confirme ao paciente.")
+                })
+                calls.recordOutcome(ctx.callId, patientId, name, phone, a.doctorId, CallOutcome.AGENDADA, CallIntent.AGENDAMENTO)
                 clinics.notify(ctx.clinic.id, NotificationType.AGENDAMENTO, "Novo agendamento", "$name — ${a.specialty}, ${a.startLocal.replace('T', ' ')} (via IA)")
                 Result(
                     response = buildJsonObject {
@@ -239,9 +251,7 @@ class SecretariaToolExecutor(
             is BookResult.Fail -> Result(fail(withAgendaHint(result.reason)))
             is BookResult.Ok -> {
                 val a = result.appointment
-                calls.attachPatient(ctx.callId, a.patientId, a.patientName, a.patientPhone.orEmpty())
-                calls.setDoctor(ctx.callId, a.doctorId)
-                calls.setOutcome(ctx.callId, CallOutcome.REMARCADA, CallIntent.REMARCACAO)
+                calls.recordOutcome(ctx.callId, a.patientId, a.patientName, a.patientPhone.orEmpty(), a.doctorId, CallOutcome.REMARCADA, CallIntent.REMARCACAO)
                 clinics.notify(ctx.clinic.id, NotificationType.AGENDAMENTO, "Consulta remarcada", "${a.patientName} — ${a.specialty}, ${a.startLocal.replace('T', ' ')} (via IA)")
                 Result(
                     response = buildJsonObject {
@@ -265,8 +275,7 @@ class SecretariaToolExecutor(
             ?: return Result(fail("Não encontrei esse agendamento para o paciente informado."))
         if (!appointments.cancel(ctx.clinic.id, id, owner.patientId)) return Result(fail("Não consegui cancelar esse agendamento."))
 
-        calls.attachPatient(ctx.callId, owner.patientId, owner.patientName, owner.patientPhone.orEmpty())
-        calls.setOutcome(ctx.callId, CallOutcome.FINALIZADA, CallIntent.CANCELAMENTO)
+        calls.recordOutcome(ctx.callId, owner.patientId, owner.patientName, owner.patientPhone.orEmpty(), null, CallOutcome.FINALIZADA, CallIntent.CANCELAMENTO)
         clinics.notify(ctx.clinic.id, NotificationType.AGENDAMENTO, "Consulta cancelada", "${owner.patientName} — ${owner.specialty}, ${owner.startLocal.replace('T', ' ')} (via IA)")
         return Result(
             response = buildJsonObject { put("ok", true); put("instrucao", "Consulta cancelada. Confirme ao paciente e pergunte se deseja remarcar.") },
@@ -302,6 +311,36 @@ class SecretariaToolExecutor(
     }
 
     private fun fail(message: String): JsonObject = buildJsonObject { put("ok", false); put("erro", message) }
+
+    private suspend fun doctorsOf(ctx: SecretariaCallContext) = ctx.doctors ?: clinics.doctors(ctx.clinic.id)
+
+    /** "9", "9h", "9:30", "09h30", "09:30" -> 09:30; null se não for um horário. */
+    private fun parseTime(text: String): LocalTime? {
+        val m = Regex("^\\s*(\\d{1,2})\\s*(?:[:hH]\\s*(\\d{2})?)?\\s*$").find(text) ?: return null
+        val hour = m.groupValues[1].toInt()
+        val minute = m.groupValues[2].ifEmpty { "0" }.toInt()
+        return if (hour in 0..23 && minute in 0..59) LocalTime.of(hour, minute) else null
+    }
+
+    /** Se o horário pedido está livre no dia [day] (e com quem); se não, os livres mais próximos do mesmo dia. */
+    private fun requestedSlot(day: LocalDate, time: LocalTime, availability: List<DoctorAvailability>): JsonObject = buildJsonObject {
+        val wanted = day.atTime(time)
+        put("inicio", wanted.toString().take(16))
+        val free = availability.filter { wanted in it.freeSlots }
+        put("livre", free.isNotEmpty())
+        if (free.isNotEmpty()) {
+            putJsonArray("medicos") { free.forEach { a -> add(buildJsonObject { put("medico_id", a.doctorId); put("medico", a.doctorName) }) } }
+            put("instrucao", "Está livre: confirme com o paciente o médico, o dia e o horário antes de agendar.")
+        } else {
+            val near = availability.flatMap { a -> a.freeSlots.filter { it.toLocalDate() == day }.map { a to it } }
+                .sortedBy { (_, slot) -> Math.abs(java.time.Duration.between(wanted, slot).toMinutes()) }
+                .take(3)
+            putJsonArray("mais_proximos") {
+                near.forEach { (a, slot) -> add(buildJsonObject { put("medico_id", a.doctorId); put("medico", a.doctorName); put("horario", slot.toLocalTime().toString()) }) }
+            }
+            put("instrucao", if (near.isEmpty()) "Não há horário livre nesse dia: ofereça outro dia da lista." else "Esse horário não está livre: ofereça os mais próximos.")
+        }
+    }
 
     /** O modelo às vezes inventa o medico_id (ex.: 1): o erro já traz os ids certos para ele corrigir sozinho. */
     private fun unknownDoctor(doctorId: Long, doctors: List<schemas.secretaria.DoctorDto>): Result? {
@@ -379,6 +418,7 @@ class SecretariaToolExecutor(
                     "especialidade" to prop("STRING", "Especialidade desejada, ex.: Cardiologia (opcional)"),
                     "medico_id" to prop("INTEGER", "Id do médico, vindo de listar_medicos_e_especialidades (opcional)"),
                     "a_partir_de" to prop("STRING", "Data inicial AAAA-MM-DD (opcional; padrão: hoje)"),
+                    "horario" to prop("STRING", "Horário que o paciente pediu, HH:MM (opcional; com a_partir_de = o dia pedido, a resposta diz se está livre)"),
                     "dias" to prop("INTEGER", "Quantos dias à frente buscar, de 1 a 14 (padrão 7)"),
                 ),
             ))
