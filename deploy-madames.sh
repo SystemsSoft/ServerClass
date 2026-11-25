@@ -2,14 +2,13 @@
 # Deploy do serviço da Madames Formosas (catálogo): processo próprio na mesma EC2 (porta 8082, só localhost; o nginx encaminha
 # /madames para ele). NÃO reinicia o servidor principal nem a SecretárIA — os outros produtos seguem no ar.
 # Primeira vez? Veja "Primeiro deploy" no MADAMES.md (credenciais do banco e configuração do nginx).
-SERVER_IP="98.92.129.159"
+SERVER_IP="3.236.188.14"
 SERVER_USER="ec2-user"
 KEY_FILE="ssh-key.pem"
 JAR_FILE="madames/build/libs/madames-0.0.1.jar"
 REMOTE_PATH="/home/$SERVER_USER/madames-0.0.1.jar"
 
-# Memória da JVM: a máquina também roda o servidor principal e a SecretárIA. Ajuste com MADAMES_JAVA_OPTS se precisar.
-JAVA_OPTS="${MADAMES_JAVA_OPTS:--Xms32m -Xmx192m}"
+# Memória da JVM (-Xms32m -Xmx192m): fica no ExecStart de /etc/systemd/system/madames.service no servidor.
 
 # Só o que a Madames usa (gitignored, opcional: só envia se existir aqui).
 # madames-credentials.properties precisa ter db.host, db.user e db.password além de madames.adminToken
@@ -46,26 +45,10 @@ for cred_file in "${CREDENTIAL_FILES[@]}"; do
 done
 
 echo "--- [5/5] Restarting Madames ---"
-ssh -i $KEY_FILE $SERVER_USER@$SERVER_IP "JAVA_OPTS='$JAVA_OPTS' bash -s" << 'EOF'
-  # Só o processo da Madames (o nome do jar não casa com o do servidor principal, server-0.0.1.jar).
-  OLD_PIDS=$(pgrep -f madames-0.0.1.jar || true)
-  if [ -n "$OLD_PIDS" ]; then
-    echo "Encerrando processo(s) antigo(s): $OLD_PIDS"
-    kill $OLD_PIDS 2>/dev/null || true
-    for i in $(seq 1 15); do
-      sleep 1
-      pgrep -f madames-0.0.1.jar > /dev/null || break
-    done
-    STILL_ALIVE=$(pgrep -f madames-0.0.1.jar || true)
-    if [ -n "$STILL_ALIVE" ]; then
-      echo "Processo(s) não encerraram a tempo, forçando (kill -9): $STILL_ALIVE"
-      kill -9 $STILL_ALIVE 2>/dev/null || true
-      sleep 1
-    fi
-  fi
-  # Roda em ~ para achar os .properties enviados acima. setsid + stdin redirecionado: sobrevive ao fim da sessão SSH.
-  cd ~ && setsid nohup java $JAVA_OPTS -jar madames-0.0.1.jar < /dev/null > madames.log 2>&1 &
-  echo "Processo iniciado em background ($JAVA_OPTS)."
+ssh -i $KEY_FILE $SERVER_USER@$SERVER_IP << 'EOF'
+  # Roda como serviço do systemd (/etc/systemd/system/madames.service, Restart=always, sobe no boot, log em ~/madames.log).
+  # NÃO usar kill + nohup: o systemd ressuscitaria o processo e ficariam dois disputando a porta 8082.
+  sudo systemctl restart madames
 
   echo "--- Verificando saude do servico ---"
   for i in $(seq 1 30); do
